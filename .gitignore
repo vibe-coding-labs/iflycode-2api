@@ -1,0 +1,13 @@
+.token-store.json
+node_modules/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.venv/
+*.db
+.enc_key
+web/dist/
+iflycode_proxy/static/
+web/tsconfig.tsbuildinfo
