@@ -49,6 +49,11 @@ def create_web_api_router(db: Database) -> APIRouter:
         valid = db.validate_account(api_key)
         return {"api_key": api_key, "valid": valid}
 
+    @router.get("/accounts/{api_key:path}/models")
+    async def list_account_models(api_key: str):
+        models = db.get_account_models(api_key)
+        return {"models": models}
+
     @router.put("/accounts/{api_key:path}/model")
     async def update_account_model(api_key: str, request: Request):
         body = await request.json()

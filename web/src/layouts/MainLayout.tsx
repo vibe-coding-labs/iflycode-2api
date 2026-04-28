@@ -1,6 +1,6 @@
 import React from 'react';
 import { Layout, Menu } from 'antd';
-import { DashboardOutlined, TeamOutlined } from '@ant-design/icons';
+import { DashboardOutlined, TeamOutlined, SettingOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 
 const { Header, Content, Sider } = Layout;
@@ -9,9 +9,15 @@ const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const selectedKey = location.pathname === '/accounts' || location.pathname.startsWith('/accounts/')
+    ? '/accounts'
+    : location.pathname;
+
   const menuItems = [
     { key: '/', icon: <DashboardOutlined />, label: '数据概览' },
     { key: '/accounts', icon: <TeamOutlined />, label: '账号管理' },
+    { key: '/logs', icon: <FileTextOutlined />, label: '请求日志' },
+    { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
   ];
 
   return (
@@ -23,7 +29,7 @@ const MainLayout: React.FC = () => {
         <Menu
           theme="dark"
           mode="inline"
-          selectedKeys={[location.pathname]}
+          selectedKeys={[selectedKey]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
         />

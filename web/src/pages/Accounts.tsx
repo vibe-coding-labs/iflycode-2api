@@ -3,6 +3,7 @@ import {
   Table, Button, Space, Modal, Form, Input, Switch,
   message, Popconfirm, Tag, Typography, Alert,
 } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import {
   PlusOutlined, DeleteOutlined, StarOutlined,
   SafetyCertificateOutlined, ReloadOutlined,
@@ -11,6 +12,7 @@ import { api } from '../api';
 import type { Account } from '../api';
 
 const Accounts: React.FC = () => {
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -84,7 +86,11 @@ const Accounts: React.FC = () => {
       title: '路由密钥 (API Key)',
       dataIndex: 'api_key',
       key: 'api_key',
-      render: (text: string) => <Typography.Text code>{text}</Typography.Text>,
+      render: (text: string) => (
+        <Typography.Text code style={{ cursor: 'pointer' }} onClick={() => navigate(`/accounts/${encodeURIComponent(text)}`)}>
+          {text}
+        </Typography.Text>
+      ),
     },
     {
       title: '用户 ID',

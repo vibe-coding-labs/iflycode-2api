@@ -1,12 +1,22 @@
-"""OpenAI-compatible API handler — translates OpenAI format to/from iFlyCode."""
+"""OpenAI-compatible API handler — translates OpenAI format to/from iFlyCode.
+
+Uses openai SDK Pydantic types for type-safe response construction.
+"""
 
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, Iterator
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+
+from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai.types.chat.chat_completion import Choice
+from openai.types.chat.chat_completion_chunk import Choice as ChunkChoice, ChoiceDelta
+from openai.types.chat.chat_completion_message import ChatCompletionMessage
+from openai.types.completion_usage import CompletionUsage
+from openai.types.model import Model
 
 from iflycode_proxy.credential_router import CredentialRouter
 
@@ -36,30 +46,44 @@ def translate_request(req_body: dict) -> dict:
     return body
 
 
-def translate_response(content: str, model: str) -> dict:
-    return {
-        "id": "chatcmpl-" + _short_id(),
-        "object": "chat.completion",
-        "created": int(time.time()),
-        "model": model,
-        "choices": [{
-            "index": 0,
-            "message": {"role": "assistant", "content": content},
-            "finish_reason": "stop",
-        }],
-        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-    }
+def _build_completion(content: str, model: str) -> ChatCompletion:
+    return ChatCompletion(
+        id=f"chatcmpl-{_short_id()}",
+        object="chat.completion",
+        created=int(time.time()),
+        model=model,
+        choices=[
+            Choice(
+                index=0,
+                message=ChatCompletionMessage(role="assistant", content=content),
+                finish_reason="stop",
+            )
+        ],
+        usage=CompletionUsage(prompt_tokens=0, completion_tokens=0, total_tokens=0),
+    )
+
+
+def _build_chunk(chat_id: str, model: str, delta: ChoiceDelta,
+                 finish_reason: str | None = None) -> ChatCompletionChunk:
+    return ChatCompletionChunk(
+        id=chat_id,
+        object="chat.completion.chunk",
+        created=int(time.time()),
+        model=model,
+        choices=[
+            ChunkChoice(index=0, delta=delta, finish_reason=finish_reason)
+        ],
+    )
 
 
 def _stream_chat(client, body: dict, model: str) -> StreamingResponse:
-    def _generate():
-        chat_id = "chatcmpl-" + _short_id()
+    def _generate() -> Iterator[str]:
+        chat_id = f"chatcmpl-{_short_id()}"
         try:
-            # Send initial role chunk
-            yield f"data: {json.dumps({'id': chat_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': model, 'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}}]})}\n\n"
+            role_chunk = _build_chunk(chat_id, model, ChoiceDelta(role="assistant", content=""))
+            yield f"data: {role_chunk.model_dump_json()}\n\n"
 
             with client.chat_stream(body.get("messages", []), body) as resp:
-                full_content = ""
                 for raw_line in resp.iter_lines():
                     if not raw_line:
                         continue
@@ -73,11 +97,11 @@ def _stream_chat(client, body: dict, model: str) -> StreamingResponse:
                         continue
 
                     try:
-                        chunk = json.loads(payload)
+                        chunk_data = json.loads(payload)
                     except (json.JSONDecodeError, ValueError):
                         continue
 
-                    choices = chunk.get("choices", [])
+                    choices = chunk_data.get("choices", [])
                     if not choices:
                         continue
 
@@ -87,18 +111,21 @@ def _stream_chat(client, body: dict, model: str) -> StreamingResponse:
                     finish_reason = choices[0].get("finish_reason")
 
                     if content:
-                        full_content += content
-                        yield f"data: {json.dumps({'id': chat_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': model, 'choices': [{'index': 0, 'delta': {'content': content}}]})}\n\n"
+                        out_chunk = _build_chunk(chat_id, model, ChoiceDelta(content=content))
+                        yield f"data: {out_chunk.model_dump_json()}\n\n"
 
                     if reasoning and not content:
-                        yield f"data: {json.dumps({'id': chat_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': model, 'choices': [{'index': 0, 'delta': {'content': f'[think]{reasoning}[/think]'}}]})}\n\n"
+                        out_chunk = _build_chunk(chat_id, model, ChoiceDelta(content=f"[think]{reasoning}[/think]"))
+                        yield f"data: {out_chunk.model_dump_json()}\n\n"
 
                     if finish_reason:
-                        yield f"data: {json.dumps({'id': chat_id, 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': finish_reason}]})}\n\n"
+                        out_chunk = _build_chunk(chat_id, model, ChoiceDelta(), finish_reason=finish_reason)
+                        yield f"data: {out_chunk.model_dump_json()}\n\n"
 
             yield "data: [DONE]\n\n"
         except Exception as exc:
-            yield f"data: {json.dumps({'error': {'message': str(exc)}})}\n\n"
+            error_payload = json.dumps({"error": {"message": str(exc)}})
+            yield f"data: {error_payload}\n\n"
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(
@@ -109,7 +136,6 @@ def _stream_chat(client, body: dict, model: str) -> StreamingResponse:
 
 
 def _stream_chat_non_streaming(client, body: dict, model: str) -> JSONResponse:
-    """Non-streaming: collect full response then return."""
     full_content = ""
     reasoning_content = ""
 
@@ -125,10 +151,10 @@ def _stream_chat_non_streaming(client, body: dict, model: str) -> JSONResponse:
             if payload == "[DONE]":
                 continue
             try:
-                chunk = json.loads(payload)
+                chunk_data = json.loads(payload)
             except (json.JSONDecodeError, ValueError):
                 continue
-            choices = chunk.get("choices", [])
+            choices = chunk_data.get("choices", [])
             if not choices:
                 continue
             delta = choices[0].get("delta", {})
@@ -138,7 +164,8 @@ def _stream_chat_non_streaming(client, body: dict, model: str) -> JSONResponse:
                 reasoning_content += delta["reasoning_content"]
 
     final = f"[think]{reasoning_content}[/think]\n\n{full_content}" if reasoning_content else full_content
-    return JSONResponse(content=translate_response(final, model))
+    completion = _build_completion(final, model)
+    return JSONResponse(content=completion.model_dump(mode="json"))
 
 
 def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
@@ -167,12 +194,12 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
 
     @router.get("/v1/models")
     async def list_models() -> Any:
+        model_ids = ["iflycode-default", "gpt-4", "gpt-4o"]
         models = [
-            {"id": "iflycode-default", "object": "model", "created": 1700000000, "owned_by": "iflycode"},
-            {"id": "gpt-4", "object": "model", "created": 1700000000, "owned_by": "iflycode"},
-            {"id": "gpt-4o", "object": "model", "created": 1700000000, "owned_by": "iflycode"},
+            Model(id=m, object="model", created=1700000000, owned_by="iflycode")
+            for m in model_ids
         ]
-        return JSONResponse(content={"object": "list", "data": models})
+        return JSONResponse(content={"object": "list", "data": [m.model_dump(mode="json") for m in models]})
 
     @router.get("/health")
     async def health() -> Any:

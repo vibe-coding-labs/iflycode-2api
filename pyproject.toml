@@ -11,6 +11,7 @@ dependencies = [
     "sse-starlette>=2.2",
     "rich>=13.7",
     "cryptography>=44.0",
+    "openai>=1.0",
 ]
 
 [project.optional-dependencies]
