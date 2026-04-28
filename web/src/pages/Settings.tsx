@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Card, Form, Input, InputNumber, Switch, Select, Button, Space, message, Spin, Typography,
+  Card, Form, Input, InputNumber, Switch, Select, Button, Space, message, Spin, Typography, Popconfirm,
 } from 'antd';
-import { SaveOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SaveOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { api } from '../api';
 
 interface SettingGroup {
@@ -126,6 +126,19 @@ const Settings: React.FC = () => {
 
         <Space>
           <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>保存设置</Button>
+          <Popconfirm
+            title="确定清理 30 天前的日志记录？"
+            onConfirm={async () => {
+              try {
+                const result = await api.cleanupLogs(30);
+                message.success(`已清理 ${result.removed} 条日志`);
+              } catch (e: unknown) {
+                message.error(e instanceof Error ? e.message : '清理失败');
+              }
+            }}
+          >
+            <Button danger icon={<DeleteOutlined />}>清理日志</Button>
+          </Popconfirm>
         </Space>
       </Form>
     </div>

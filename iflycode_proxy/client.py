@@ -26,16 +26,19 @@ LOGIN_URL_ENDPOINT = "/api/starspark/v1/agent/authSetting/query"
 LOGIN_STATUS_ENDPOINT = "/api/starspark/v1/user/authorizationQuery"
 LOGOUT_ENDPOINT = "/api/starspark/v1/chat/user/logOut"
 
+DEFAULT_TIMEOUT = httpx.Timeout(connect=10, read=120, write=30, pool=10)
+
 
 class Client:
     """HTTP client that mimics iFlyCode 3.4.2 agent requests."""
 
-    def __init__(self, token: str, user_id: str = ""):
+    def __init__(self, token: str, user_id: str = "",
+                 base_url: str = BASE_URL, timeout: httpx.Timeout = DEFAULT_TIMEOUT):
         self.token = token
         self.user_id = user_id
         self._http = httpx.Client(
-            base_url=BASE_URL,
-            timeout=httpx.Timeout(connect=10, read=120, write=30, pool=10),
+            base_url=base_url,
+            timeout=timeout,
             follow_redirects=True,
         )
 

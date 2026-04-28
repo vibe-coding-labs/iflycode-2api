@@ -85,8 +85,17 @@ def create_web_api_router(db: Database) -> APIRouter:
         return db.get_stats()
 
     @router.get("/stats/logs")
-    async def get_logs(limit: int = 100):
+    async def get_logs(limit: int = 100, api_key: str = "", model: str = "", status: int = 0):
+        if api_key or model or status:
+            return {"logs": db.get_filtered_logs(limit, api_key=api_key, model=model, status_code=status)}
         return {"logs": db.get_recent_logs(limit)}
+
+    @router.post("/stats/logs/cleanup")
+    async def cleanup_logs(request: Request):
+        body = await request.json()
+        days = body.get("retention_days", 30)
+        removed = db.cleanup_logs(days)
+        return {"ok": True, "removed": removed}
 
     # -- Health --
 

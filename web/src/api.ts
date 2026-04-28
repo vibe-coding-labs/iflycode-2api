@@ -67,8 +67,15 @@ export const api = {
 
   // Stats
   getStats: () => request<Stats>('/api/stats'),
-  getLogs: (limit: number = 100) =>
-    request<{ logs: LogEntry[] }>('/api/stats/logs?limit=' + limit).then(r => r.logs),
+  getLogs: (limit: number = 100, filters?: { api_key?: string; model?: string; status?: number }) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (filters?.api_key) params.set('api_key', filters.api_key);
+    if (filters?.model) params.set('model', filters.model);
+    if (filters?.status) params.set('status', String(filters.status));
+    return request<{ logs: LogEntry[] }>(`/api/stats/logs?${params}`).then(r => r.logs);
+  },
+  cleanupLogs: (retentionDays: number = 30) =>
+    request<{ ok: boolean; removed: number }>('/api/stats/logs/cleanup', { method: 'POST', body: JSON.stringify({ retention_days: retentionDays }) }),
 
   // Settings
   getSettings: () => request<Record<string, string>>('/api/settings').then(r => r.settings || {}),
@@ -76,5 +83,5 @@ export const api = {
     request<{ ok: boolean }>('/api/settings', { method: 'PUT', body: JSON.stringify(data) }),
 
   // Health
-  getHealth: () => request<{ status: string; accounts: number }>('/api/health'),
+  getHealth: () => request<{ status: string; accounts: number; version: string }>('/api/health'),
 };

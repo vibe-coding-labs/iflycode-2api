@@ -1,13 +1,15 @@
-import React from 'react';
-import { Layout, Menu } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Layout, Menu, Typography } from 'antd';
 import { DashboardOutlined, TeamOutlined, SettingOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { api } from '../api';
 
-const { Header, Content, Sider } = Layout;
+const { Header, Content, Sider, Footer } = Layout;
 
 const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [version, setVersion] = useState('');
 
   const selectedKey = location.pathname === '/accounts' || location.pathname.startsWith('/accounts/')
     ? '/accounts'
@@ -19,6 +21,10 @@ const MainLayout: React.FC = () => {
     { key: '/logs', icon: <FileTextOutlined />, label: '请求日志' },
     { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
   ];
+
+  useEffect(() => {
+    api.getHealth().then(data => setVersion(data.version || '')).catch(() => {});
+  }, []);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -41,6 +47,9 @@ const MainLayout: React.FC = () => {
         <Content style={{ margin: 24 }}>
           <Outlet />
         </Content>
+        <Footer style={{ textAlign: 'center', padding: '12px 24px', color: '#999', fontSize: 12 }}>
+          iFlyCode Proxy {version && `v${version}`} — port 40419
+        </Footer>
       </Layout>
     </Layout>
   );

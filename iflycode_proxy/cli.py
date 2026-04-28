@@ -7,6 +7,8 @@ import click
 
 log = logging.getLogger("iflycode-proxy")
 
+AGENT_VERSION = "3.4.2"
+
 
 @click.group()
 @click.option("-v", "--verbose", is_flag=True, help="Enable debug logging")
@@ -45,3 +47,10 @@ def serve(ctx, host: str, port: int):
 
 if __name__ == "__main__":
     cli()
+
+
+@cli.command()
+def version():
+    click.echo("iFlyCode Proxy v1.0.0")
+    click.echo(f"  Agent fingerprint: iFlyCode {AGENT_VERSION}")
+    click.echo(f"  Default port: 40419")

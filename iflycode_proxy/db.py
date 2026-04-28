@@ -205,6 +205,38 @@ class Database:
         rows = conn.execute("SELECT * FROM request_logs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
 
+    def get_filtered_logs(self, limit: int = 100, api_key: str = "",
+                          model: str = "", status_code: int = 0) -> List[Dict[str, Any]]:
+        conn = self._get_conn()
+        conditions: list[str] = []
+        params: list[Any] = []
+        if api_key:
+            conditions.append("api_key = ?")
+            params.append(api_key)
+        if model:
+            conditions.append("model = ?")
+            params.append(model)
+        if status_code > 0:
+            if status_code == 1:
+                conditions.append("status_code < 400")
+            elif status_code == 2:
+                conditions.append("status_code >= 400")
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        rows = conn.execute(
+            f"SELECT * FROM request_logs {where} ORDER BY id DESC LIMIT ?",
+            (*params, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def cleanup_logs(self, retention_days: int = 30) -> int:
+        conn = self._get_conn()
+        cursor = conn.execute(
+            "DELETE FROM request_logs WHERE created_at < datetime('now', ?)",
+            (f"-{retention_days} days",),
+        )
+        conn.commit()
+        return cursor.rowcount
+
     def get_stats(self) -> Dict[str, Any]:
         conn = self._get_conn()
         total = conn.execute("SELECT COUNT(*) as cnt FROM request_logs").fetchone()["cnt"]
