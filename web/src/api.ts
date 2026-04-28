@@ -84,4 +84,12 @@ export const api = {
 
   // Health
   getHealth: () => request<{ status: string; accounts: number; version: string }>('/api/health'),
+
+  // SSO Auth
+  getLoginUrl: () =>
+    request<{ ok: boolean; login_url: string; client_id: string }>('/api/auth/login-url', { method: 'POST' }),
+  pollLoginStatus: (clientId: string) =>
+    request<{ ok: boolean; status: string; token?: string; user_id?: string }>(`/api/auth/login-status?client_id=${encodeURIComponent(clientId)}`),
+  addAccountFromSSO: (data: { token: string; user_id?: string; api_key?: string; is_default?: boolean }) =>
+    request<{ ok: boolean; api_key: string }>('/api/auth/add-from-sso', { method: 'POST', body: JSON.stringify(data) }),
 };

@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Table, Button, Space, Modal, Form, Input, Switch,
-  message, Popconfirm, Tag, Typography, Alert,
+  message, Popconfirm, Tag, Typography, Alert, Tabs, Spin,
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
   PlusOutlined, DeleteOutlined, StarOutlined,
-  SafetyCertificateOutlined, ReloadOutlined,
+  SafetyCertificateOutlined, ReloadOutlined, LoginOutlined,
+  CheckCircleOutlined, LoadingOutlined,
 } from '@ant-design/icons';
 import { api } from '../api';
 import type { Account } from '../api';
@@ -18,6 +19,13 @@ const Accounts: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
   const [validating, setValidating] = useState<string | null>(null);
+
+  // SSO login state
+  const [ssoLoginUrl, setSsoLoginUrl] = useState('');
+  const [ssoClientId, setSsoClientId] = useState('');
+  const [ssoLoading, setSsoLoading] = useState(false);
+  const [ssoPolling, setSsoPolling] = useState(false);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -32,6 +40,10 @@ const Accounts: React.FC = () => {
   };
 
   useEffect(() => { fetchAccounts(); }, []);
+
+  useEffect(() => {
+    return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); };
+  }, []);
 
   const handleAdd = async (values: { api_key: string; token: string; user_id?: string; is_default?: boolean }) => {
     try {
@@ -79,6 +91,57 @@ const Accounts: React.FC = () => {
     } finally {
       setValidating(null);
     }
+  };
+
+  const handleSSOLogin = async () => {
+    setSsoLoading(true);
+    setSsoLoginUrl('');
+    setSsoClientId('');
+    try {
+      const result = await api.getLoginUrl();
+      if (result.login_url) {
+        setSsoLoginUrl(result.login_url);
+        setSsoClientId(result.client_id);
+        window.open(result.login_url, '_blank');
+        startPolling(result.client_id);
+      }
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : '获取登录地址失败');
+    } finally {
+      setSsoLoading(false);
+    }
+  };
+
+  const startPolling = (clientId: string) => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    setSsoPolling(true);
+    pollTimerRef.current = setInterval(async () => {
+      try {
+        const result = await api.pollLoginStatus(clientId);
+        if (result.ok && result.token) {
+          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+          setSsoPolling(false);
+          const addResult = await api.addAccountFromSSO({
+            token: result.token,
+            user_id: result.user_id || '',
+          });
+          message.success(`SSO 登录成功，已添加账号「${addResult.api_key}」`);
+          setModalOpen(false);
+          fetchAccounts();
+        }
+      } catch {
+        // keep polling
+      }
+    }, 2000);
+  };
+
+  const handleModalClose = () => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    setSsoPolling(false);
+    setSsoLoginUrl('');
+    setSsoClientId('');
+    setModalOpen(false);
+    form.resetFields();
   };
 
   const columns = [
@@ -154,26 +217,87 @@ const Accounts: React.FC = () => {
       <Modal
         title="添加 iFlyCode 账号"
         open={modalOpen}
-        onCancel={() => { setModalOpen(false); form.resetFields(); }}
-        onOk={() => form.submit()}
-        okText="添加"
-        cancelText="取消"
-        width={520}
+        onCancel={handleModalClose}
+        footer={null}
+        width={560}
+        destroyOnClose
       >
-        <Form form={form} layout="vertical" onFinish={handleAdd}>
-          <Form.Item name="api_key" label="路由密钥" rules={[{ required: true, message: '请输入路由密钥' }]}>
-            <Input placeholder="例如：account-1、user-zhangsan" />
-          </Form.Item>
-          <Form.Item name="token" label="iFlyCode Token" rules={[{ required: true, message: '请输入 token' }]}>
-            <Input.Password placeholder="从 iFlyCode 登录后获取的 token" />
-          </Form.Item>
-          <Form.Item name="user_id" label="用户 ID">
-            <Input placeholder="可选" />
-          </Form.Item>
-          <Form.Item name="is_default" valuePropName="checked" label="设为默认账号">
-            <Switch />
-          </Form.Item>
-        </Form>
+        <Tabs
+          items={[
+            {
+              key: 'sso',
+              label: 'SSO 登录（推荐）',
+              children: (
+                <div style={{ padding: '12px 0' }}>
+                  <Typography.Paragraph>
+                    点击下方按钮将打开 iFlyCode 登录页面。完成登录后，token 将自动获取并添加到账号池。
+                  </Typography.Paragraph>
+                  {!ssoLoginUrl ? (
+                    <Button
+                      type="primary"
+                      size="large"
+                      icon={<LoginOutlined />}
+                      loading={ssoLoading}
+                      onClick={handleSSOLogin}
+                      block
+                    >
+                      打开 iFlyCode 登录
+                    </Button>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                      {ssoPolling ? (
+                        <>
+                          <Spin indicator={<LoadingOutlined style={{ fontSize: 32 }} />} />
+                          <Typography.Paragraph style={{ marginTop: 16 }}>
+                            等待登录完成...
+                          </Typography.Paragraph>
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            请在浏览器中完成登录
+                          </Typography.Text>
+                        </>
+                      ) : (
+                        <Typography.Text type="success">
+                          <CheckCircleOutlined /> 登录成功
+                        </Typography.Text>
+                      )}
+                      <div style={{ marginTop: 12 }}>
+                        <Button size="small" type="link" onClick={() => window.open(ssoLoginUrl, '_blank')}>
+                          重新打开登录页面
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ),
+            },
+            {
+              key: 'manual',
+              label: '手动粘贴 Token',
+              children: (
+                <Form form={form} layout="vertical" onFinish={handleAdd} style={{ padding: '12px 0' }}>
+                  <Form.Item name="api_key" label="路由密钥" rules={[{ required: true, message: '请输入路由密钥' }]}>
+                    <Input placeholder="例如：account-1、user-zhangsan" />
+                  </Form.Item>
+                  <Form.Item name="token" label="iFlyCode Token" rules={[{ required: true, message: '请输入 token' }]}>
+                    <Input.Password placeholder="从 iFlyCode 登录后获取的 token" />
+                  </Form.Item>
+                  <Form.Item name="user_id" label="用户 ID">
+                    <Input placeholder="可选" />
+                  </Form.Item>
+                  <Form.Item name="is_default" valuePropName="checked" label="设为默认账号">
+                    <Switch />
+                  </Form.Item>
+                  <Form.Item>
+                    <Space>
+                      <Button type="primary" htmlType="submit">添加</Button>
+                      <Button onClick={handleModalClose}>取消</Button>
+                    </Space>
+                  </Form.Item>
+                </Form>
+              ),
+            },
+          ]}
+        />
       </Modal>
     </div>
   );

@@ -6,7 +6,7 @@ Uses openai SDK Pydantic types for type-safe response construction.
 import json
 import logging
 import time
-from typing import Any, Iterator
+from typing import Any, Iterator, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -64,7 +64,7 @@ def _build_completion(content: str, model: str) -> ChatCompletion:
 
 
 def _build_chunk(chat_id: str, model: str, delta: ChoiceDelta,
-                 finish_reason: str | None = None) -> ChatCompletionChunk:
+                 finish_reason: Optional[str] = None) -> ChatCompletionChunk:
     return ChatCompletionChunk(
         id=chat_id,
         object="chat.completion.chunk",

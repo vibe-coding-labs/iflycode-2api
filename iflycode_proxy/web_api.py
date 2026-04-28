@@ -5,6 +5,7 @@ from typing import Dict
 
 from fastapi import APIRouter, HTTPException, Request
 
+from iflycode_proxy.auth import get_login_url, poll_login_status
 from iflycode_proxy.db import Database
 
 log = logging.getLogger("iflycode-proxy.web-api")
@@ -64,6 +65,35 @@ def create_web_api_router(db: Database) -> APIRouter:
     @router.get("/accounts/{api_key:path}/stats")
     async def get_account_stats(api_key: str):
         return db.get_account_stats(api_key)
+
+    # -- SSO Auth --
+
+    @router.post("/auth/login-url")
+    async def auth_login_url():
+        result = get_login_url()
+        if not result.get("ok"):
+            raise HTTPException(502, result.get("error", "Failed to get login URL"))
+        return result
+
+    @router.get("/auth/login-status")
+    async def auth_login_status(client_id: str = ""):
+        if not client_id:
+            raise HTTPException(400, "client_id is required")
+        return poll_login_status(client_id)
+
+    @router.post("/auth/add-from-sso")
+    async def auth_add_from_sso(request: Request):
+        body = await request.json()
+        token = body.get("token", "").strip()
+        user_id = body.get("user_id", "").strip()
+        api_key = body.get("api_key", "").strip()
+        if not token:
+            raise HTTPException(400, "token is required")
+        if not api_key:
+            api_key = f"sso-{user_id}" if user_id else f"sso-{token[:8]}"
+        is_default = body.get("is_default", False)
+        db.add_account(api_key, token, user_id, is_default=is_default)
+        return {"ok": True, "api_key": api_key}
 
     # -- Settings --
 
