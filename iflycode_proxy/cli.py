@@ -20,7 +20,7 @@ def cli(ctx, verbose: bool):
 
 @cli.command()
 @click.option("-H", "--host", default="0.0.0.0", help="Bind host")
-@click.option("-p", "--port", default=9090, help="Bind port")
+@click.option("-p", "--port", default=40419, help="Bind port")
 @click.pass_context
 def serve(ctx, host: str, port: int):
     import uvicorn
