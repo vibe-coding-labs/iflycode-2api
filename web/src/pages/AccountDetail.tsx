@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Col, Row, Statistic, Typography, Spin, Select, Button,
-  Breadcrumb, Space, Tag, Table, message,
+  Breadcrumb, Space, Tag, Table, message, Input,
 } from 'antd';
 import {
   ArrowLeftOutlined, ApiOutlined, ThunderboltOutlined,
   CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined,
+  CopyOutlined,
 } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../api';
@@ -139,6 +140,30 @@ const AccountDetail: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      <Card title="Claude Code 启动命令" style={{ marginTop: 16 }}>
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          复制以下命令到终端启动 Claude Code，环境变量会自动将请求路由到此账号。
+        </Typography.Paragraph>
+        <Input
+          readOnly
+          value={`OPENAI_API_KEY=${decodedKey} OPENAI_BASE_URL=http://localhost:40419/v1 claude`}
+          style={{ fontFamily: 'monospace', marginBottom: 8 }}
+          suffix={
+            <Button
+              type="link"
+              size="small"
+              icon={<CopyOutlined />}
+              onClick={() => {
+                navigator.clipboard.writeText(`OPENAI_API_KEY=${decodedKey} OPENAI_BASE_URL=http://localhost:40419/v1 claude`);
+                message.success('已复制 Claude Code 启动命令');
+              }}
+            >
+              复制
+            </Button>
+          }
+        />
+      </Card>
 
       {stats && stats.by_model.length > 0 && (
         <Card title="模型使用分布" style={{ marginTop: 16 }}>
