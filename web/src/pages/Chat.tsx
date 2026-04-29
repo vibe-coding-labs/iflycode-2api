@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  Typography, Select, Button, Input, Space, Card, Avatar, Spin,
+  Typography, Select, Button, Input, Space, Avatar, Spin,
   Empty, Popconfirm,
 } from 'antd';
 import {
   SendOutlined, RobotOutlined, UserOutlined,
-  ClearOutlined,
+  ClearOutlined, StopOutlined,
 } from '@ant-design/icons';
 import { api } from '../api';
 import type { Account } from '../api';
@@ -15,6 +15,57 @@ const { TextArea } = Input;
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+}
+
+const DB_NAME = 'iflycode-chat';
+const DB_VERSION = 1;
+const STORE_NAME = 'conversations';
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function loadMessages(accountKey: string): Promise<ChatMessage[]> {
+  const db = await openDB();
+  return new Promise((resolve) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.get(accountKey);
+    req.onsuccess = () => resolve(req.result?.messages || []);
+    req.onerror = () => resolve([]);
+  });
+}
+
+async function saveMessages(accountKey: string, messages: ChatMessage[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.put({ id: accountKey, messages });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function clearMessages(accountKey: string): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.delete(accountKey);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 const Chat: React.FC = () => {
@@ -51,8 +102,18 @@ const Chat: React.FC = () => {
   }, [selectedAccount]);
 
   useEffect(() => {
+    if (!selectedAccount) return;
+    loadMessages(selectedAccount).then(m => setMessages(m)).catch(() => setMessages([]));
+  }, [selectedAccount]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const persistMessages = useCallback((msgs: ChatMessage[]) => {
+    if (!selectedAccount) return;
+    saveMessages(selectedAccount, msgs).catch(() => {});
+  }, [selectedAccount]);
 
   const handleSend = async () => {
     const text = input.trim();
@@ -65,7 +126,8 @@ const Chat: React.FC = () => {
     setStreaming(true);
 
     const assistantMsg: ChatMessage = { role: 'assistant', content: '' };
-    setMessages([...newMessages, assistantMsg]);
+    const withAssistant = [...newMessages, assistantMsg];
+    setMessages(withAssistant);
 
     const abort = new AbortController();
     abortRef.current = abort;
@@ -115,17 +177,22 @@ const Chat: React.FC = () => {
             const delta = chunk.choices?.[0]?.delta;
             if (delta?.content) {
               assistantMsg.content += delta.content;
-              setMessages([...newMessages, { ...assistantMsg }]);
+              const updated = [...newMessages, { ...assistantMsg }];
+              setMessages(updated);
             }
           } catch {
             // skip malformed chunks
           }
         }
       }
+
+      persistMessages([...newMessages, { ...assistantMsg }]);
     } catch (e: unknown) {
       if ((e as Error).name !== 'AbortError') {
         assistantMsg.content = `[错误] ${e instanceof Error ? e.message : '请求失败'}`;
-        setMessages([...newMessages, { ...assistantMsg }]);
+        const failed = [...newMessages, { ...assistantMsg }];
+        setMessages(failed);
+        persistMessages(failed);
       }
     } finally {
       setStreaming(false);
@@ -136,15 +203,19 @@ const Chat: React.FC = () => {
   const handleStop = () => {
     abortRef.current?.abort();
     setStreaming(false);
+    persistMessages(messages);
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
     setMessages([]);
+    if (selectedAccount) {
+      await clearMessages(selectedAccount).catch(() => {});
+    }
   };
 
   if (accounts.length === 0) {
     return (
-      <div>
+      <div style={{ padding: 24 }}>
         <Typography.Title level={4}>聊天测试</Typography.Title>
         <Empty
           description="暂无账号，请先在「账号管理」中添加账号"
@@ -159,29 +230,29 @@ const Chat: React.FC = () => {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 160px)' }}>
-      <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 148px)', overflow: 'hidden' }}>
+      {/* Top bar */}
+      <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', gap: 8 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>聊天测试</Typography.Title>
-        <Space>
+        <Space wrap>
           <Select
             value={selectedAccount}
             onChange={setSelectedAccount}
-            style={{ width: 200 }}
+            style={{ minWidth: 160, maxWidth: 220 }}
             placeholder="选择账号"
             options={accounts.map(a => ({
               value: a.api_key,
               label: (
-                <Space>
-                  {a.is_default && <Typography.Text type="warning">★</Typography.Text>}
-                  {a.api_key}
-                </Space>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {a.is_default ? '★ ' : ''}{a.api_key}
+                </span>
               ),
             }))}
           />
           <Select
             value={selectedModel}
             onChange={setSelectedModel}
-            style={{ width: 180 }}
+            style={{ minWidth: 140, maxWidth: 200 }}
             placeholder="选择模型"
             options={[
               { value: 'iflycode-default', label: '默认模型' },
@@ -189,17 +260,15 @@ const Chat: React.FC = () => {
             ]}
           />
           <Popconfirm title="清空所有对话记录？" onConfirm={handleClear}>
-            <Button icon={<ClearOutlined />} size="small">清空</Button>
+            <Button icon={<ClearOutlined />}>清空</Button>
           </Popconfirm>
         </Space>
       </div>
 
-      <Card
-        style={{ flex: 1, overflow: 'hidden', marginBottom: 12 }}
-        styles={{ body: { height: '100%', overflowY: 'auto', padding: '16px 20px' } }}
-      >
+      {/* Messages area */}
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', marginBottom: 12, padding: '12px 16px', backgroundColor: '#fafafa', borderRadius: 8 }}>
         {messages.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#999' }}>
+          <div style={{ textAlign: 'center', padding: '80px 20px', color: '#999' }}>
             <RobotOutlined style={{ fontSize: 48, marginBottom: 16, display: 'block' }} />
             <Typography.Text type="secondary">
               选择账号和模型，输入消息开始对话
@@ -213,21 +282,25 @@ const Chat: React.FC = () => {
                 display: 'flex',
                 justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
                 marginBottom: 16,
+                maxWidth: '100%',
               }}
             >
               {msg.role === 'assistant' && (
-                <Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#1677ff', flexShrink: 0, marginRight: 8 }} />
+                <Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#1677ff', flexShrink: 0, marginRight: 10, marginTop: 2 }} />
               )}
               <div
                 style={{
-                  maxWidth: '70%',
-                  padding: '8px 14px',
+                  maxWidth: '75%',
+                  padding: '10px 16px',
                   borderRadius: 12,
-                  backgroundColor: msg.role === 'user' ? '#1677ff' : '#f0f0f0',
+                  backgroundColor: msg.role === 'user' ? '#1677ff' : '#fff',
                   color: msg.role === 'user' ? '#fff' : '#333',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
-                  lineHeight: 1.6,
+                  lineHeight: 1.7,
+                  boxShadow: msg.role === 'assistant' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                  border: msg.role === 'assistant' ? '1px solid #f0f0f0' : 'none',
+                  overflowWrap: 'break-word',
                 }}
               >
                 {msg.content}
@@ -236,15 +309,16 @@ const Chat: React.FC = () => {
                 )}
               </div>
               {msg.role === 'user' && (
-                <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068', flexShrink: 0, marginLeft: 8 }} />
+                <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068', flexShrink: 0, marginLeft: 10, marginTop: 2 }} />
               )}
             </div>
           ))
         )}
         <div ref={messagesEndRef} />
-      </Card>
+      </div>
 
-      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+      {/* Input area */}
+      <div style={{ flexShrink: 0, display: 'flex', gap: 12, alignItems: 'flex-end' }}>
         <TextArea
           value={input}
           onChange={e => setInput(e.target.value)}
@@ -252,12 +326,18 @@ const Chat: React.FC = () => {
             if (!e.shiftKey) { e.preventDefault(); handleSend(); }
           }}
           placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-          autoSize={{ minRows: 1, maxRows: 4 }}
+          autoSize={{ minRows: 3, maxRows: 8 }}
           disabled={streaming}
-          style={{ flex: 1 }}
+          style={{ flex: 1, fontSize: 15, padding: '10px 14px', borderRadius: 8 }}
         />
         {streaming ? (
-          <Button danger onClick={handleStop} style={{ alignSelf: 'flex-end' }}>
+          <Button
+            danger
+            icon={<StopOutlined />}
+            onClick={handleStop}
+            size="large"
+            style={{ height: 'auto', minHeight: 56, borderRadius: 8, paddingInline: 24 }}
+          >
             停止
           </Button>
         ) : (
@@ -266,7 +346,8 @@ const Chat: React.FC = () => {
             icon={<SendOutlined />}
             onClick={handleSend}
             disabled={!input.trim() || !selectedAccount}
-            style={{ alignSelf: 'flex-end' }}
+            size="large"
+            style={{ height: 'auto', minHeight: 56, borderRadius: 8, paddingInline: 28 }}
           >
             发送
           </Button>
