@@ -59,6 +59,13 @@ def create_app(router: CredentialRouter, db=None):
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.is_dir():
-        app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+        from starlette.responses import FileResponse
+
+        @app.get("/{path:path}")
+        async def spa_fallback(path: str):
+            file = static_dir / path
+            if file.is_file():
+                return FileResponse(str(file))
+            return FileResponse(str(static_dir / "index.html"))
 
     return app
