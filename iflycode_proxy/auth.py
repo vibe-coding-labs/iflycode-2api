@@ -56,8 +56,8 @@ def poll_login_status(client_id: str) -> dict:
     try:
         with httpx.Client(base_url=BASE_URL, timeout=10) as http:
             resp = http.get(
-                f"{LOGIN_STATUS_ENDPOINT}?clientId={client_id}",
-                headers={"Content-Type": "application/json"},
+                LOGIN_STATUS_ENDPOINT,
+                headers={"Content-Type": "application/json", "clientId": client_id},
             )
             data = resp.json()
     except Exception as e:
