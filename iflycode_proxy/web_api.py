@@ -132,6 +132,12 @@ def create_web_api_router(db: Database) -> APIRouter:
     @router.get("/health")
     async def health():
         accounts = db.list_accounts()
-        return {"status": "ok", "accounts": len(accounts), "version": "1.0.0"}
+        db_size_mb = 0.0
+        try:
+            import os
+            db_size_mb = os.path.getsize(str(db.db_path)) / (1024 * 1024)
+        except OSError:
+            pass
+        return {"status": "ok", "accounts": len(accounts), "version": "1.0.0", "db_size_mb": round(db_size_mb, 2)}
 
     return router

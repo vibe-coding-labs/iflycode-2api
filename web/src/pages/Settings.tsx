@@ -48,7 +48,8 @@ const SETTING_GROUPS: SettingGroup[] = [
     title: '日志与安全',
     items: [
       { key: 'log_enabled', label: '请求日志', type: 'switch', tooltip: '记录所有 API 请求到数据库' },
-      { key: 'log_retention_days', label: '日志保留天数', type: 'number', numberPlaceholder: 30, tooltip: '超过此天数的日志将自动清理' },
+      { key: 'log_retention_days', label: '日志保留天数', type: 'number', numberPlaceholder: 30, tooltip: '超过此天数的日志将自动清理（默认 30 天）' },
+      { key: 'storage_max_mb', label: '存储空间上限 (MB)', type: 'number', numberPlaceholder: 1024, tooltip: 'SQLite 数据库文件超过此大小时自动清理老日志（默认 1024 MB = 1 GB）' },
     ],
   },
 ];

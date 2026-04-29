@@ -2,11 +2,12 @@
 
 import logging
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 
 from iflycode_proxy.credential_router import CredentialRouter
@@ -14,9 +15,29 @@ from iflycode_proxy.openai_handler import create_openai_router
 
 log = logging.getLogger("iflycode-proxy")
 
+_janitor_task: Optional[object] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db = app.state.db
+    if db:
+        from iflycode_proxy.janitor import start_janitor
+        global _janitor_task
+        _janitor_task = start_janitor(
+            db_path=str(db.db_path),
+            get_setting_fn=db.get_setting,
+            cleanup_fn=db.cleanup_logs,
+        )
+    yield
+    if _janitor_task:
+        _janitor_task.cancel()
+        log.info("Janitor stopped")
+
 
 def create_app(router: CredentialRouter, db=None):
-    app = FastAPI(title="iFlyCode Proxy")
+    app = FastAPI(title="iFlyCode Proxy", lifespan=lifespan)
+    app.state.db = db
 
     app.add_middleware(
         CORSMiddleware,
