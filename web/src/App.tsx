@@ -7,6 +7,7 @@ import MainLayout from './layouts/MainLayout';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Accounts = lazy(() => import('./pages/Accounts'));
 const AccountDetail = lazy(() => import('./pages/AccountDetail'));
+const Chat = lazy(() => import('./pages/Chat'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Logs = lazy(() => import('./pages/Logs'));
 
@@ -20,6 +21,7 @@ const App: React.FC = () => (
           <Route path="/" element={<Suspense fallback={pageLoading}><Dashboard /></Suspense>} />
           <Route path="/accounts" element={<Suspense fallback={pageLoading}><Accounts /></Suspense>} />
           <Route path="/accounts/:apiKey" element={<Suspense fallback={pageLoading}><AccountDetail /></Suspense>} />
+          <Route path="/chat" element={<Suspense fallback={pageLoading}><Chat /></Suspense>} />
           <Route path="/settings" element={<Suspense fallback={pageLoading}><Settings /></Suspense>} />
           <Route path="/logs" element={<Suspense fallback={pageLoading}><Logs /></Suspense>} />
         </Route>

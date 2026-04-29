@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Layout, Menu, Typography } from 'antd';
-import { DashboardOutlined, TeamOutlined, SettingOutlined, FileTextOutlined } from '@ant-design/icons';
+import { DashboardOutlined, TeamOutlined, MessageOutlined, SettingOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../api';
 
@@ -18,6 +18,7 @@ const MainLayout: React.FC = () => {
   const menuItems = [
     { key: '/', icon: <DashboardOutlined />, label: '数据概览' },
     { key: '/accounts', icon: <TeamOutlined />, label: '账号管理' },
+    { key: '/chat', icon: <MessageOutlined />, label: '聊天测试' },
     { key: '/logs', icon: <FileTextOutlined />, label: '请求日志' },
     { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
   ];
