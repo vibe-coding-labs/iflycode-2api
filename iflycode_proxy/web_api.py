@@ -5,7 +5,7 @@ from typing import Dict
 
 from fastapi import APIRouter, HTTPException, Request
 
-from iflycode_proxy.auth import get_login_url, poll_login_status, login_by_account
+from iflycode_proxy.auth import get_login_url, poll_login_status
 from iflycode_proxy.db import Database
 
 log = logging.getLogger("iflycode-proxy.web-api")
@@ -94,22 +94,6 @@ def create_web_api_router(db: Database) -> APIRouter:
         is_default = body.get("is_default", False)
         db.add_account(api_key, token, user_id, is_default=is_default)
         return {"ok": True, "api_key": api_key}
-
-    @router.post("/auth/login-by-account")
-    async def auth_login_by_account(request: Request):
-        body = await request.json()
-        username = body.get("username", "").strip()
-        password = body.get("password", "").strip()
-        if not username or not password:
-            raise HTTPException(400, "username and password are required")
-        result = login_by_account(username, password)
-        if not result.get("ok"):
-            raise HTTPException(401, result.get("error", "登录失败"))
-        token = result["token"]
-        user_id = result.get("user_id", "")
-        api_key = f"account-{username}"
-        db.add_account(api_key, token, user_id, is_default=False)
-        return {"ok": True, "api_key": api_key, "user_id": user_id, "username": username}
 
     # -- Settings --
 
