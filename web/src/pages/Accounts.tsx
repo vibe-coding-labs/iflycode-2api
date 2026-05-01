@@ -1,16 +1,42 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Table, Button, Space, Modal, Form, Input, Switch,
-  message, Popconfirm, Tag, Typography, Alert, Tabs, Spin, Tooltip,
+  message, Popconfirm, Tag, Typography, Alert, Tabs, Spin, Tooltip, Popover,
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
   PlusOutlined, DeleteOutlined, StarOutlined,
   SafetyCertificateOutlined, ReloadOutlined, LoginOutlined,
-  CheckCircleOutlined, LoadingOutlined, CodeOutlined, RobotOutlined,
+  CheckCircleOutlined, LoadingOutlined, CodeOutlined, RobotOutlined, CopyOutlined,
 } from '@ant-design/icons';
 import { api } from '../api';
 import type { Account } from '../api';
+
+const CommandPreview: React.FC<{ label: string; cmd: string; onCopy: () => void }> = ({ label, cmd, onCopy }) => (
+  <div style={{ maxWidth: 480 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+      <Typography.Text strong style={{ fontSize: 12 }}>{label}</Typography.Text>
+      <Button size="small" type="link" icon={<CopyOutlined />} onClick={onCopy} style={{ padding: 0, height: 'auto', fontSize: 12 }}>
+        复制
+      </Button>
+    </div>
+    <pre style={{
+      margin: 0,
+      padding: '8px 10px',
+      background: '#1e1e1e',
+      color: '#d4d4d4',
+      borderRadius: 6,
+      fontSize: 11,
+      lineHeight: 1.5,
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-all',
+      maxHeight: 200,
+      overflowY: 'auto',
+    }}>
+      {cmd}
+    </pre>
+  </div>
+);
 
 const Accounts: React.FC = () => {
   const navigate = useNavigate();
@@ -195,26 +221,20 @@ const Accounts: React.FC = () => {
         const codexCmd = `OPENAI_API_KEY="${record.api_key}" \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\ncodex`;
         return (
           <Space>
-            <Tooltip title="复制 Claude Code 启动命令">
-              <Button
-                size="small"
-                icon={<RobotOutlined />}
-                onClick={() => {
-                  navigator.clipboard.writeText(claudeCmd);
-                  message.success('已复制 Claude Code 启动命令');
-                }}
-              />
-            </Tooltip>
-            <Tooltip title="复制 Codex 启动命令">
-              <Button
-                size="small"
-                icon={<CodeOutlined />}
-                onClick={() => {
-                  navigator.clipboard.writeText(codexCmd);
-                  message.success('已复制 Codex 启动命令');
-                }}
-              />
-            </Tooltip>
+            <Popover
+              placement="leftTop"
+              trigger="hover"
+              content={<CommandPreview label="Claude Code 启动命令" cmd={claudeCmd} onCopy={() => { navigator.clipboard.writeText(claudeCmd); message.success('已复制 Claude Code 启动命令'); }} />}
+            >
+              <Button size="small" icon={<RobotOutlined />} />
+            </Popover>
+            <Popover
+              placement="leftTop"
+              trigger="hover"
+              content={<CommandPreview label="Codex 启动命令" cmd={codexCmd} onCopy={() => { navigator.clipboard.writeText(codexCmd); message.success('已复制 Codex 启动命令'); }} />}
+            >
+              <Button size="small" icon={<CodeOutlined />} />
+            </Popover>
           </Space>
         );
       },
