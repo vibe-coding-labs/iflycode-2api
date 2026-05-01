@@ -7,7 +7,7 @@ import {
 import {
   ArrowLeftOutlined, ApiOutlined, ThunderboltOutlined,
   CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined,
-  CopyOutlined,
+  CopyOutlined, RobotOutlined, CodeOutlined,
 } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../api';
@@ -141,28 +141,50 @@ const AccountDetail: React.FC = () => {
         </Col>
       </Row>
 
-      <Card title="Claude Code 启动命令" style={{ marginTop: 16 }}>
+      <Card title="启动命令" style={{ marginTop: 16 }}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          复制以下命令到终端启动 Claude Code，环境变量会自动将请求路由到此账号。
+          复制以下命令到终端，环境变量会自动将请求路由到此账号。
         </Typography.Paragraph>
-        <Input
-          readOnly
-          value={`OPENAI_API_KEY=${decodedKey} OPENAI_BASE_URL=http://localhost:40419/v1 claude`}
-          style={{ fontFamily: 'monospace', marginBottom: 8 }}
-          suffix={
-            <Button
-              type="link"
-              size="small"
-              icon={<CopyOutlined />}
-              onClick={() => {
-                navigator.clipboard.writeText(`OPENAI_API_KEY=${decodedKey} OPENAI_BASE_URL=http://localhost:40419/v1 claude`);
-                message.success('已复制 Claude Code 启动命令');
-              }}
-            >
-              复制
-            </Button>
-          }
-        />
+
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Text strong><RobotOutlined style={{ marginRight: 6 }} />Claude Code</Typography.Text>
+          <Input.TextArea
+            readOnly
+            autoSize
+            value={`API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\nOPENAI_API_KEY="${decodedKey}" \\\nclaude --dangerously-skip-permissions`}
+            style={{ fontFamily: 'monospace', marginTop: 6, marginBottom: 4 }}
+          />
+          <Button
+            size="small"
+            icon={<CopyOutlined />}
+            onClick={() => {
+              navigator.clipboard.writeText(`API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\nOPENAI_API_KEY="${decodedKey}" \\\nclaude --dangerously-skip-permissions`);
+              message.success('已复制 Claude Code 启动命令');
+            }}
+          >
+            复制 Claude Code 命令
+          </Button>
+        </div>
+
+        <div>
+          <Typography.Text strong><CodeOutlined style={{ marginRight: 6 }} />Codex</Typography.Text>
+          <Input.TextArea
+            readOnly
+            autoSize
+            value={`OPENAI_API_KEY="${decodedKey}" \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\ncodex`}
+            style={{ fontFamily: 'monospace', marginTop: 6, marginBottom: 4 }}
+          />
+          <Button
+            size="small"
+            icon={<CopyOutlined />}
+            onClick={() => {
+              navigator.clipboard.writeText(`OPENAI_API_KEY="${decodedKey}" \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\ncodex`);
+              message.success('已复制 Codex 启动命令');
+            }}
+          >
+            复制 Codex 命令
+          </Button>
+        </div>
       </Card>
 
       {stats && stats.by_model.length > 0 && (

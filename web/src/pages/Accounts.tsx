@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   PlusOutlined, DeleteOutlined, StarOutlined,
   SafetyCertificateOutlined, ReloadOutlined, LoginOutlined,
-  CheckCircleOutlined, LoadingOutlined, CopyOutlined,
+  CheckCircleOutlined, LoadingOutlined, CodeOutlined, RobotOutlined,
 } from '@ant-design/icons';
 import { api } from '../api';
 import type { Account } from '../api';
@@ -186,25 +186,36 @@ const Accounts: React.FC = () => {
       ),
     },
     {
-      title: 'Claude Code 命令',
+      title: '启动命令',
       key: 'copy_cmd',
       width: 120,
       align: 'center' as const,
       render: (_: unknown, record: Account) => {
-        const cmd = `OPENAI_API_KEY=${record.api_key} OPENAI_BASE_URL=http://localhost:40419/v1 claude`;
+        const claudeCmd = `API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\nOPENAI_API_KEY="${record.api_key}" \\\nclaude --dangerously-skip-permissions`;
+        const codexCmd = `OPENAI_API_KEY="${record.api_key}" \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\ncodex`;
         return (
-          <Tooltip title={cmd}>
-            <Button
-              size="small"
-              icon={<CopyOutlined />}
-              onClick={() => {
-                navigator.clipboard.writeText(cmd);
-                message.success('已复制 Claude Code 启动命令');
-              }}
-            >
-              复制命令
-            </Button>
-          </Tooltip>
+          <Space>
+            <Tooltip title="复制 Claude Code 启动命令">
+              <Button
+                size="small"
+                icon={<RobotOutlined />}
+                onClick={() => {
+                  navigator.clipboard.writeText(claudeCmd);
+                  message.success('已复制 Claude Code 启动命令');
+                }}
+              />
+            </Tooltip>
+            <Tooltip title="复制 Codex 启动命令">
+              <Button
+                size="small"
+                icon={<CodeOutlined />}
+                onClick={() => {
+                  navigator.clipboard.writeText(codexCmd);
+                  message.success('已复制 Codex 启动命令');
+                }}
+              />
+            </Tooltip>
+          </Space>
         );
       },
     },
