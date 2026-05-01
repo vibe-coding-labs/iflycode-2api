@@ -12,31 +12,72 @@ import {
 import { api } from '../api';
 import type { Account } from '../api';
 
-const CommandPreview: React.FC<{ label: string; cmd: string; onCopy: () => void }> = ({ label, cmd, onCopy }) => (
-  <div style={{ maxWidth: 480 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-      <Typography.Text strong style={{ fontSize: 12 }}>{label}</Typography.Text>
-      <Button size="small" type="link" icon={<CopyOutlined />} onClick={onCopy} style={{ padding: 0, height: 'auto', fontSize: 12 }}>
-        复制
-      </Button>
+const highlightBash = (cmd: string) => {
+  const tokens: { text: string; color: string }[] = [];
+  const envRe = /^([A-Z_][A-Z_0-9]*)(=)/;
+  const lines = cmd.split('\n');
+  lines.forEach((line, li) => {
+    if (li > 0) tokens.push({ text: '\n', color: '#d4d4d4' });
+    let rest = line;
+    while (rest) {
+      const envMatch = rest.match(envRe);
+      if (envMatch) {
+        tokens.push({ text: envMatch[1], color: '#9cdcfe' });
+        tokens.push({ text: envMatch[2], color: '#d4d4d4' });
+        rest = rest.slice(envMatch[0].length);
+        const valMatch = rest.match(/^("(?:[^"]*)")|([^\s\\][^\s\\]*)/);
+        if (valMatch) {
+          const val = valMatch[1] || valMatch[2] || '';
+          tokens.push({ text: val, color: '#ce9178' });
+          rest = rest.slice(val.length);
+        }
+        continue;
+      }
+      const bsMatch = rest.match(/^\\\\/);
+      if (bsMatch) {
+        tokens.push({ text: bsMatch[0], color: '#d4d4d4' });
+        rest = rest.slice(bsMatch[0].length);
+        continue;
+      }
+      const cmdMatch = rest.match(/^(claude|codex)\b/);
+      if (cmdMatch) {
+        tokens.push({ text: cmdMatch[0], color: '#4ec9b0' });
+        rest = rest.slice(cmdMatch[0].length);
+        continue;
+      }
+      const flagMatch = rest.match(/^(--?[a-zA-Z][\w-]*)/);
+      if (flagMatch) {
+        tokens.push({ text: flagMatch[0], color: '#569cd6' });
+        rest = rest.slice(flagMatch[0].length);
+        continue;
+      }
+      tokens.push({ text: rest[0], color: '#d4d4d4' });
+      rest = rest.slice(1);
+    }
+  });
+  return tokens;
+};
+
+const CommandPreview: React.FC<{ label: string; cmd: string; onCopy: () => void }> = ({ label, cmd, onCopy }) => {
+  const tokens = React.useMemo(() => highlightBash(cmd), [cmd]);
+  return (
+    <div style={{ maxWidth: 480 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <Typography.Text strong style={{ fontSize: 12 }}>{label}</Typography.Text>
+        <Button size="small" type="link" icon={<CopyOutlined />} onClick={onCopy} style={{ padding: 0, height: 'auto', fontSize: 12 }}>
+          复制
+        </Button>
+      </div>
+      <pre style={{
+        margin: 0, padding: '8px 10px', background: '#1e1e1e', borderRadius: 6,
+        fontSize: 11, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+        maxHeight: 200, overflowY: 'auto',
+      }}>
+        {tokens.map((t, i) => <span key={i} style={{ color: t.color }}>{t.text}</span>)}
+      </pre>
     </div>
-    <pre style={{
-      margin: 0,
-      padding: '8px 10px',
-      background: '#1e1e1e',
-      color: '#d4d4d4',
-      borderRadius: 6,
-      fontSize: 11,
-      lineHeight: 1.5,
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-all',
-      maxHeight: 200,
-      overflowY: 'auto',
-    }}>
-      {cmd}
-    </pre>
-  </div>
-);
+  );
+};
 
 const Accounts: React.FC = () => {
   const navigate = useNavigate();
