@@ -19,10 +19,12 @@ from openai.types.completion_usage import CompletionUsage
 from openai.types.model import Model
 
 from iflycode_proxy.credential_router import CredentialRouter
+from iflycode_proxy.proxy_logger import log_request, log_response, log_error
 
 log = logging.getLogger("iflycode-proxy.openai")
 
 DEFAULT_MODEL = "iflycode-default"
+PROTOCOL = "openai"
 
 
 def _short_id() -> str:
@@ -31,6 +33,17 @@ def _short_id() -> str:
 
 def _error_response(message: str, status_code: int = 500) -> JSONResponse:
     return JSONResponse(status_code=status_code, content={"error": {"message": message, "type": "api_error"}})
+
+
+def _summarize_messages(messages: list) -> str:
+    """Create a compact summary of messages for logging."""
+    parts = []
+    for m in messages:
+        role = m.get("role", "?")
+        content = m.get("content", "")
+        preview = str(content)[:100] if content else "(empty)"
+        parts.append(f"{role}: {preview}")
+    return "; ".join(parts)
 
 
 def translate_request(req_body: dict) -> dict:
@@ -76,9 +89,12 @@ def _build_chunk(chat_id: str, model: str, delta: ChoiceDelta,
     )
 
 
-def _stream_chat(client, body: dict, model: str) -> StreamingResponse:
+def _stream_chat(client, body: dict, model: str, api_key: str) -> StreamingResponse:
+    start_time = time.time()
+
     def _generate() -> Iterator[str]:
         chat_id = f"chatcmpl-{_short_id()}"
+        token_count = 0
         try:
             role_chunk = _build_chunk(chat_id, model, ChoiceDelta(role="assistant", content=""))
             yield f"data: {role_chunk.model_dump_json()}\n\n"
@@ -111,6 +127,7 @@ def _stream_chat(client, body: dict, model: str) -> StreamingResponse:
                     finish_reason = choices[0].get("finish_reason")
 
                     if content:
+                        token_count += 1
                         out_chunk = _build_chunk(chat_id, model, ChoiceDelta(content=content))
                         yield f"data: {out_chunk.model_dump_json()}\n\n"
 
@@ -123,7 +140,22 @@ def _stream_chat(client, body: dict, model: str) -> StreamingResponse:
                         yield f"data: {out_chunk.model_dump_json()}\n\n"
 
             yield "data: [DONE]\n\n"
+
+            latency_ms = int((time.time() - start_time) * 1000)
+            log_response(
+                protocol=PROTOCOL, endpoint="/v1/chat/completions",
+                api_key=api_key, model=model,
+                status_code=200, latency_ms=latency_ms,
+                response_summary=f"stream completed, {token_count} chunks",
+                stream=True,
+            )
+
         except Exception as exc:
+            log_error(
+                protocol=PROTOCOL, endpoint="/v1/chat/completions",
+                api_key=api_key, model=model, error=exc,
+                context={"stream": True, "chunks_so_far": token_count},
+            )
             error_payload = json.dumps({"error": {"message": str(exc)}})
             yield f"data: {error_payload}\n\n"
             yield "data: [DONE]\n\n"
@@ -135,37 +167,59 @@ def _stream_chat(client, body: dict, model: str) -> StreamingResponse:
     )
 
 
-def _stream_chat_non_streaming(client, body: dict, model: str) -> JSONResponse:
+def _stream_chat_non_streaming(client, body: dict, model: str,
+                               api_key: str) -> JSONResponse:
+    start_time = time.time()
     full_content = ""
     reasoning_content = ""
 
-    with client.chat_stream(body.get("messages", []), body) as resp:
-        for raw_line in resp.iter_lines():
-            if not raw_line:
-                continue
-            line = raw_line.decode("utf-8", errors="replace") if isinstance(raw_line, bytes) else raw_line
-            if line.startswith("data:"):
-                payload = line[5:].strip()
-            else:
-                continue
-            if payload == "[DONE]":
-                continue
-            try:
-                chunk_data = json.loads(payload)
-            except (json.JSONDecodeError, ValueError):
-                continue
-            choices = chunk_data.get("choices", [])
-            if not choices:
-                continue
-            delta = choices[0].get("delta", {})
-            if delta.get("content"):
-                full_content += delta["content"]
-            if delta.get("reasoning_content"):
-                reasoning_content += delta["reasoning_content"]
+    try:
+        with client.chat_stream(body.get("messages", []), body) as resp:
+            for raw_line in resp.iter_lines():
+                if not raw_line:
+                    continue
+                line = raw_line.decode("utf-8", errors="replace") if isinstance(raw_line, bytes) else raw_line
+                if line.startswith("data:"):
+                    payload = line[5:].strip()
+                else:
+                    continue
+                if payload == "[DONE]":
+                    continue
+                try:
+                    chunk_data = json.loads(payload)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                choices = chunk_data.get("choices", [])
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {})
+                if delta.get("content"):
+                    full_content += delta["content"]
+                if delta.get("reasoning_content"):
+                    reasoning_content += delta["reasoning_content"]
 
-    final = f"[think]{reasoning_content}[/think]\n\n{full_content}" if reasoning_content else full_content
-    completion = _build_completion(final, model)
-    return JSONResponse(content=completion.model_dump(mode="json"))
+        final = f"[think]{reasoning_content}[/think]\n\n{full_content}" if reasoning_content else full_content
+        completion = _build_completion(final, model)
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_response(
+            protocol=PROTOCOL, endpoint="/v1/chat/completions",
+            api_key=api_key, model=model,
+            status_code=200, latency_ms=latency_ms,
+            response_summary=final[:200],
+            stream=False,
+        )
+
+        return JSONResponse(content=completion.model_dump(mode="json"))
+
+    except Exception as exc:
+        latency_ms = int((time.time() - start_time) * 1000)
+        log_error(
+            protocol=PROTOCOL, endpoint="/v1/chat/completions",
+            api_key=api_key, model=model, error=exc,
+            context={"stream": False, "latency_ms": latency_ms},
+        )
+        return _error_response(str(exc), 500)
 
 
 def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
@@ -177,20 +231,40 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
         try:
             client = cred_router.get_client(api_key or None)
         except KeyError:
+            log_error(
+                protocol=PROTOCOL, endpoint="/v1/chat/completions",
+                api_key=api_key, model="",
+                error=KeyError(f"No account for key '{api_key}'"),
+                context={"reason": "authentication_failed"},
+            )
             return _error_response("No account available. Add an account via /api/accounts first.", 401)
 
         try:
             req_body = await request.json()
-        except Exception:
+        except Exception as exc:
+            log_error(
+                protocol=PROTOCOL, endpoint="/v1/chat/completions",
+                api_key=api_key, model="",
+                error=exc,
+                context={"reason": "invalid_json_body"},
+            )
             return _error_response("invalid JSON", 400)
 
         model = req_body.get("model", DEFAULT_MODEL)
         jc_body = translate_request(req_body)
 
-        if jc_body.get("stream"):
-            return _stream_chat(client, jc_body, model)
+        log_request(
+            protocol=PROTOCOL, endpoint="/v1/chat/completions",
+            api_key=api_key, model=model,
+            messages_summary=_summarize_messages(req_body.get("messages", [])),
+            stream=bool(jc_body.get("stream")),
+            extra={"message_count": len(req_body.get("messages", []))},
+        )
 
-        return _stream_chat_non_streaming(client, jc_body, model)
+        if jc_body.get("stream"):
+            return _stream_chat(client, jc_body, model, api_key)
+
+        return _stream_chat_non_streaming(client, jc_body, model, api_key)
 
     @router.get("/v1/models")
     async def list_models() -> Any:

@@ -10,8 +10,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from iflycode_proxy.credential_router import CredentialRouter
+from iflycode_proxy.proxy_logger import log_request, log_response, log_error
 
 log = logging.getLogger("iflycode-proxy.anthropic")
+
+PROTOCOL = "anthropic"
 
 
 def _msg_id() -> str:
@@ -33,6 +36,23 @@ def _extract_api_key(request: Request) -> str:
         if auth.startswith("Bearer "):
             api_key = auth[7:]
     return api_key
+
+
+def _summarize_messages(messages: list) -> str:
+    """Create a compact summary of messages for logging."""
+    parts = []
+    for m in messages:
+        role = m.get("role", "?")
+        content = m.get("content", "")
+        if isinstance(content, str):
+            preview = content[:100]
+        elif isinstance(content, list):
+            texts = [b.get("text", "")[:50] for b in content if b.get("type") == "text"]
+            preview = " | ".join(texts)[:100]
+        else:
+            preview = str(content)[:100]
+        parts.append(f"{role}: {preview}")
+    return "; ".join(parts)
 
 
 def _translate_messages(req_body: dict) -> list:
@@ -79,9 +99,14 @@ def _build_non_stream_response(content: str, model: str, input_tokens: int = 0,
     }
 
 
-def _stream_anthropic(client, messages: list, body: dict, model: str) -> StreamingResponse:
+def _stream_anthropic(client, messages: list, body: dict, model: str,
+                      api_key: str) -> StreamingResponse:
+    start_time = time.time()
+
     def _generate() -> Iterator[str]:
         msg_id = _msg_id()
+        output_tokens = 0
+        first_error = None
         try:
             # message_start
             start_data = {
@@ -102,7 +127,6 @@ def _stream_anthropic(client, messages: list, body: dict, model: str) -> Streami
             # content_block_start
             yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
 
-            output_tokens = 0
             with client.chat_stream(messages, body) as resp:
                 for raw_line in resp.iter_lines():
                     if not raw_line:
@@ -159,8 +183,22 @@ def _stream_anthropic(client, messages: list, body: dict, model: str) -> Streami
             # message_stop
             yield f"event: message_stop\ndata: {json.dumps({'type': 'message_stop'})}\n\n"
 
+            latency_ms = int((time.time() - start_time) * 1000)
+            log_response(
+                protocol=PROTOCOL, endpoint="/v1/messages",
+                api_key=api_key, model=model,
+                status_code=200, latency_ms=latency_ms,
+                response_summary=f"stream completed, {output_tokens} tokens",
+                stream=True,
+            )
+
         except Exception as exc:
-            log.error("Anthropic stream error: %s", exc)
+            first_error = exc
+            log_error(
+                protocol=PROTOCOL, endpoint="/v1/messages",
+                api_key=api_key, model=model, error=exc,
+                context={"stream": True, "output_tokens_so_far": output_tokens},
+            )
             error_event = {
                 "type": "error",
                 "error": {"type": "api_error", "message": str(exc)},
@@ -174,37 +212,59 @@ def _stream_anthropic(client, messages: list, body: dict, model: str) -> Streami
     )
 
 
-def _non_stream_response(client, messages: list, body: dict, model: str) -> JSONResponse:
+def _non_stream_response(client, messages: list, body: dict, model: str,
+                         api_key: str) -> JSONResponse:
+    start_time = time.time()
     full_content = ""
     reasoning_content = ""
 
-    with client.chat_stream(messages, body) as resp:
-        for raw_line in resp.iter_lines():
-            if not raw_line:
-                continue
-            line = raw_line.decode("utf-8", errors="replace") if isinstance(raw_line, bytes) else raw_line
-            if line.startswith("data:"):
-                payload = line[5:].strip()
-            else:
-                continue
-            if payload == "[DONE]":
-                continue
-            try:
-                chunk_data = json.loads(payload)
-            except (json.JSONDecodeError, ValueError):
-                continue
-            choices = chunk_data.get("choices", [])
-            if not choices:
-                continue
-            delta = choices[0].get("delta", {})
-            if delta.get("content"):
-                full_content += delta["content"]
-            if delta.get("reasoning_content"):
-                reasoning_content += delta["reasoning_content"]
+    try:
+        with client.chat_stream(messages, body) as resp:
+            for raw_line in resp.iter_lines():
+                if not raw_line:
+                    continue
+                line = raw_line.decode("utf-8", errors="replace") if isinstance(raw_line, bytes) else raw_line
+                if line.startswith("data:"):
+                    payload = line[5:].strip()
+                else:
+                    continue
+                if payload == "[DONE]":
+                    continue
+                try:
+                    chunk_data = json.loads(payload)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                choices = chunk_data.get("choices", [])
+                if not choices:
+                    continue
+                delta = choices[0].get("delta", {})
+                if delta.get("content"):
+                    full_content += delta["content"]
+                if delta.get("reasoning_content"):
+                    reasoning_content += delta["reasoning_content"]
 
-    final = f"[think]{reasoning_content}[/think]\n\n{full_content}" if reasoning_content else full_content
-    resp_data = _build_non_stream_response(final, model, output_tokens=len(final.split()))
-    return JSONResponse(content=resp_data)
+        final = f"[think]{reasoning_content}[/think]\n\n{full_content}" if reasoning_content else full_content
+        resp_data = _build_non_stream_response(final, model, output_tokens=len(final.split()))
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        log_response(
+            protocol=PROTOCOL, endpoint="/v1/messages",
+            api_key=api_key, model=model,
+            status_code=200, latency_ms=latency_ms,
+            response_summary=final[:200],
+            stream=False,
+        )
+
+        return JSONResponse(content=resp_data)
+
+    except Exception as exc:
+        latency_ms = int((time.time() - start_time) * 1000)
+        log_error(
+            protocol=PROTOCOL, endpoint="/v1/messages",
+            api_key=api_key, model=model, error=exc,
+            context={"stream": False, "latency_ms": latency_ms},
+        )
+        return _error_response(str(exc), 500, "api_error")
 
 
 def create_anthropic_router(cred_router: CredentialRouter) -> APIRouter:
@@ -212,10 +272,18 @@ def create_anthropic_router(cred_router: CredentialRouter) -> APIRouter:
 
     @router.post("/v1/messages")
     async def create_message(request: Request) -> Any:
+        start_time = time.time()
         api_key = _extract_api_key(request)
+
         try:
             client = cred_router.get_client(api_key or None)
         except KeyError:
+            log_error(
+                protocol=PROTOCOL, endpoint="/v1/messages",
+                api_key=api_key, model="",
+                error=KeyError(f"No account for key '{api_key}'"),
+                context={"reason": "authentication_failed"},
+            )
             return _error_response(
                 "No account available. Add an account via /api/accounts first.",
                 401, "authentication_error",
@@ -223,14 +291,32 @@ def create_anthropic_router(cred_router: CredentialRouter) -> APIRouter:
 
         try:
             req_body = await request.json()
-        except Exception:
+        except Exception as exc:
+            log_error(
+                protocol=PROTOCOL, endpoint="/v1/messages",
+                api_key=api_key, model="",
+                error=exc,
+                context={"reason": "invalid_json_body"},
+            )
             return _error_response("invalid JSON", 400, "invalid_request_error")
 
         model = req_body.get("model", "claude-3-5-sonnet-20241022")
         stream = bool(req_body.get("stream", False))
         max_tokens = req_body.get("max_tokens", 4096)
-
         messages = _translate_messages(req_body)
+
+        log_request(
+            protocol=PROTOCOL, endpoint="/v1/messages",
+            api_key=api_key, model=model,
+            messages_summary=_summarize_messages(messages),
+            stream=stream,
+            extra={
+                "max_tokens": max_tokens,
+                "system_present": bool(req_body.get("system")),
+                "message_count": len(req_body.get("messages", [])),
+                "anthropic_version": request.headers.get("anthropic-version", ""),
+            },
+        )
 
         jc_body: dict = {"stream": True}
         temperature = req_body.get("temperature")
@@ -238,8 +324,8 @@ def create_anthropic_router(cred_router: CredentialRouter) -> APIRouter:
             jc_body["temperature"] = temperature
 
         if stream:
-            return _stream_anthropic(client, messages, jc_body, model)
+            return _stream_anthropic(client, messages, jc_body, model, api_key)
 
-        return _non_stream_response(client, messages, jc_body, model)
+        return _non_stream_response(client, messages, jc_body, model, api_key)
 
     return router

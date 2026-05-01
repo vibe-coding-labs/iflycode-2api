@@ -127,6 +127,27 @@ def create_web_api_router(db: Database) -> APIRouter:
         removed = db.cleanup_logs(days)
         return {"ok": True, "removed": removed}
 
+    # -- Proxy Logs --
+
+    @router.get("/proxy-logs")
+    async def get_proxy_logs(lines: int = 100):
+        from iflycode_proxy.proxy_logger import get_log_dir
+        log_dir = get_log_dir()
+        log_file = log_dir / "proxy.log"
+        if not log_file.exists():
+            return {"logs": [], "files": []}
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["tail", "-n", str(min(lines, 1000)), str(log_file)],
+                capture_output=True, text=True, timeout=5,
+            )
+            log_lines = result.stdout.strip().split("\n") if result.stdout.strip() else []
+        except Exception:
+            log_lines = []
+        from iflycode_proxy.proxy_logger import get_log_files
+        return {"logs": log_lines, "files": get_log_files()}
+
     # -- Health --
 
     @router.get("/health")
