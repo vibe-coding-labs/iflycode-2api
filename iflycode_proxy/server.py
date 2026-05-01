@@ -12,6 +12,7 @@ from starlette.middleware.gzip import GZipMiddleware
 
 from iflycode_proxy.credential_router import CredentialRouter
 from iflycode_proxy.openai_handler import create_openai_router
+from iflycode_proxy.anthropic_handler import create_anthropic_router
 
 log = logging.getLogger("iflycode-proxy")
 
@@ -77,6 +78,7 @@ def create_app(router: CredentialRouter, db=None):
         app.include_router(create_web_api_router(db))
 
     app.include_router(create_openai_router(router))
+    app.include_router(create_anthropic_router(router))
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.is_dir():

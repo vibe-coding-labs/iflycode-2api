@@ -151,14 +151,14 @@ const AccountDetail: React.FC = () => {
           <Input.TextArea
             readOnly
             autoSize
-            value={`API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\nOPENAI_API_KEY="${decodedKey}" \\\nclaude --dangerously-skip-permissions`}
+            value={`API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nANTHROPIC_BASE_URL=http://localhost:40419 \\\nANTHROPIC_AUTH_TOKEN="${decodedKey}" \\\nclaude --dangerously-skip-permissions`}
             style={{ fontFamily: 'monospace', marginTop: 6, marginBottom: 4 }}
           />
           <Button
             size="small"
             icon={<CopyOutlined />}
             onClick={() => {
-              navigator.clipboard.writeText(`API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\nOPENAI_API_KEY="${decodedKey}" \\\nclaude --dangerously-skip-permissions`);
+              navigator.clipboard.writeText(`API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nANTHROPIC_BASE_URL=http://localhost:40419 \\\nANTHROPIC_AUTH_TOKEN="${decodedKey}" \\\nclaude --dangerously-skip-permissions`);
               message.success('已复制 Claude Code 启动命令');
             }}
           >

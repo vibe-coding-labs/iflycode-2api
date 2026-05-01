@@ -191,7 +191,7 @@ const Accounts: React.FC = () => {
       width: 120,
       align: 'center' as const,
       render: (_: unknown, record: Account) => {
-        const claudeCmd = `API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\nOPENAI_API_KEY="${record.api_key}" \\\nclaude --dangerously-skip-permissions`;
+        const claudeCmd = `API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nANTHROPIC_BASE_URL=http://localhost:40419 \\\nANTHROPIC_AUTH_TOKEN="${record.api_key}" \\\nclaude --dangerously-skip-permissions`;
         const codexCmd = `OPENAI_API_KEY="${record.api_key}" \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\ncodex`;
         return (
           <Space>
