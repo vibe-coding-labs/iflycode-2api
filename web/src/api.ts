@@ -92,4 +92,6 @@ export const api = {
     request<{ ok: boolean; status: string; token?: string; user_id?: string }>(`/api/auth/login-status?client_id=${encodeURIComponent(clientId)}`),
   addAccountFromSSO: (data: { token: string; user_id?: string; api_key?: string; is_default?: boolean }) =>
     request<{ ok: boolean; api_key: string }>('/api/auth/add-from-sso', { method: 'POST', body: JSON.stringify(data) }),
+  loginByAccount: (data: { username: string; password: string }) =>
+    request<{ ok: boolean; api_key: string; user_id: string; username: string }>('/api/auth/login-by-account', { method: 'POST', body: JSON.stringify(data) }),
 };

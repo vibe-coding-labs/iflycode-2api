@@ -27,6 +27,10 @@ const Accounts: React.FC = () => {
   const [ssoPolling, setSsoPolling] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Account login state
+  const [accountForm] = Form.useForm();
+  const [accountLoginLoading, setAccountLoginLoading] = useState(false);
+
   const fetchAccounts = async () => {
     setLoading(true);
     try {
@@ -135,6 +139,21 @@ const Accounts: React.FC = () => {
     }, 2000);
   };
 
+  const handleAccountLogin = async (values: { username: string; password: string }) => {
+    setAccountLoginLoading(true);
+    try {
+      const result = await api.loginByAccount(values);
+      message.success(`登录成功，已添加账号「${result.api_key}」`);
+      setModalOpen(false);
+      accountForm.resetFields();
+      fetchAccounts();
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : '登录失败');
+    } finally {
+      setAccountLoginLoading(false);
+    }
+  };
+
   const handleModalClose = () => {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     setSsoPolling(false);
@@ -142,6 +161,7 @@ const Accounts: React.FC = () => {
     setSsoClientId('');
     setModalOpen(false);
     form.resetFields();
+    accountForm.resetFields();
   };
 
   const columns = [
@@ -302,6 +322,29 @@ const Accounts: React.FC = () => {
                     </div>
                   )}
                 </div>
+              ),
+            },
+            {
+              key: 'account',
+              label: '账号密码登录',
+              children: (
+                <Form form={accountForm} layout="vertical" onFinish={handleAccountLogin} style={{ padding: '12px 0' }}>
+                  <Typography.Paragraph type="secondary">
+                    使用 iFlyCode 账号密码直接登录，token 将自动获取并添加到账号池。
+                  </Typography.Paragraph>
+                  <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+                    <Input placeholder="iFlyCode 用户名" autoComplete="username" />
+                  </Form.Item>
+                  <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
+                    <Input.Password placeholder="iFlyCode 密码" autoComplete="current-password" />
+                  </Form.Item>
+                  <Form.Item>
+                    <Space>
+                      <Button type="primary" htmlType="submit" loading={accountLoginLoading} icon={<LoginOutlined />}>登录并添加</Button>
+                      <Button onClick={handleModalClose}>取消</Button>
+                    </Space>
+                  </Form.Item>
+                </Form>
               ),
             },
             {
