@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import time
 import uuid
 from typing import Any, Dict, Iterator, List, Optional
@@ -27,6 +28,26 @@ LOGIN_STATUS_ENDPOINT = "/api/starspark/v1/user/authorizationQuery"
 LOGOUT_ENDPOINT = "/api/starspark/v1/chat/user/logOut"
 
 DEFAULT_TIMEOUT = httpx.Timeout(connect=10, read=120, write=30, pool=10)
+
+# Retry config for upstream engine errors
+_MAX_RETRIES = 3
+_INITIAL_BACKOFF = 1.0
+_MAX_BACKOFF = 8.0
+
+# Patterns indicating transient upstream errors worth retrying
+_RETRYABLE_ERROR_PATTERNS = [
+    re.compile(r"EngineInternalError", re.IGNORECASE),
+    re.compile(r"kernel\s*error", re.IGNORECASE),
+    re.compile(r"engineCode\s*=\s*10908", re.IGNORECASE),
+    re.compile(r"code\s*=\s*1010\b", re.IGNORECASE),
+    re.compile(r"service\s*overloaded", re.IGNORECASE),
+    re.compile(r"rate\s*limit", re.IGNORECASE),
+    re.compile(r"too\s*many\s*requests", re.IGNORECASE),
+]
+
+
+def _is_retryable_error(text: str) -> bool:
+    return any(p.search(text) for p in _RETRYABLE_ERROR_PATTERNS)
 
 
 class Client:
@@ -92,14 +113,51 @@ class Client:
     def chat(self, messages: List[Dict], options: Optional[Dict] = None) -> httpx.Response:
         body = self.build_chat_body(messages, options)
         url = f"{CHAT_ENDPOINT}?token={self.token}"
-        resp = self._http.post(url, headers=self._headers(), json=body)
-        resp.raise_for_status()
-        return resp
+        backoff = _INITIAL_BACKOFF
+        last_exc = None
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                resp = self._http.post(url, headers=self._headers(), json=body)
+                resp.raise_for_status()
+                data = resp.json()
+                # Check for upstream engine errors in the response body
+                resp_text = json.dumps(data)
+                if _is_retryable_error(resp_text) and attempt < _MAX_RETRIES:
+                    log.warning("Upstream retryable error on attempt %d/%d, retrying in %.1fs: %s",
+                                attempt + 1, _MAX_RETRIES, backoff, resp_text[:200])
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, _MAX_BACKOFF)
+                    continue
+                return resp
+            except httpx.HTTPStatusError as exc:
+                resp_text = ""
+                try:
+                    resp_text = exc.response.text
+                except Exception:
+                    pass
+                if _is_retryable_error(resp_text) and attempt < _MAX_RETRIES:
+                    log.warning("Upstream HTTP %d error on attempt %d/%d, retrying in %.1fs",
+                                exc.response.status_code, attempt + 1, _MAX_RETRIES, backoff)
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, _MAX_BACKOFF)
+                    last_exc = exc
+                    continue
+                raise
+            except (httpx.ConnectError, httpx.ReadError, httpx.WriteError, httpx.PoolTimeout) as exc:
+                if attempt < _MAX_RETRIES:
+                    log.warning("Connection error on attempt %d/%d, retrying in %.1fs: %s",
+                                attempt + 1, _MAX_RETRIES, backoff, exc)
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, _MAX_BACKOFF)
+                    last_exc = exc
+                    continue
+                raise
+        raise last_exc  # type: ignore[misc]
 
     def chat_stream(self, messages: List[Dict], options: Optional[Dict] = None):
         body = self.build_chat_body(messages, options)
         url = f"{CHAT_ENDPOINT}?token={self.token}"
-        return self._http.stream("POST", url, headers=self._headers(), json=body)
+        return _RetryableStream(self._http, url, self._headers(), body)
 
     def validate(self) -> bool:
         try:
@@ -144,3 +202,91 @@ class Client:
             self.close()
         except Exception:
             pass
+
+
+class _RetryableStream:
+    """Context manager that wraps an httpx stream with retry on upstream engine errors.
+
+    Reads the first SSE chunk; if it contains a retryable error, closes the stream,
+    waits with exponential backoff, and retries. Otherwise yields lines normally.
+    """
+
+    def __init__(self, http_client: httpx.Client, url: str, headers: Dict, body: Dict):
+        self._http = http_client
+        self._url = url
+        self._headers = headers
+        self._body = body
+        self._resp: Optional[httpx.Response] = None
+        self._line_iter: Optional[Iterator[bytes]] = None
+
+    def __enter__(self):
+        self._open_stream()
+        return self
+
+    def __exit__(self, *args):
+        self._close_resp()
+
+    def _close_resp(self):
+        if self._resp is not None:
+            try:
+                self._resp.close()
+            except Exception:
+                pass
+            self._resp = None
+            self._line_iter = None
+
+    def _open_stream(self):
+        self._resp = self._http.stream("POST", self._url, headers=self._headers, json=self._body).__enter__()
+        self._line_iter = self._resp.iter_lines()
+
+    def iter_lines(self):
+        backoff = _INITIAL_BACKOFF
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                # Peek at the first non-empty line to detect engine errors
+                first_lines = []
+                if self._line_iter is not None:
+                    for raw_line in self._line_iter:
+                        if raw_line:
+                            first_lines.append(raw_line)
+                            break
+
+                # If we got a first line, check for retryable errors
+                if first_lines:
+                    line = first_lines[0]
+                    decoded = line.decode("utf-8", errors="replace") if isinstance(line, bytes) else line
+                    if decoded.startswith("data:"):
+                        payload = decoded[5:].strip()
+                        if payload != "[DONE]" and _is_retryable_error(payload) and attempt < _MAX_RETRIES:
+                            log.warning("Stream upstream error on attempt %d/%d, retrying in %.1fs: %s",
+                                        attempt + 1, _MAX_RETRIES, backoff, payload[:200])
+                            self._close_resp()
+                            time.sleep(backoff)
+                            backoff = min(backoff * 2, _MAX_BACKOFF)
+                            # Rebuild body with new requestId
+                            self._body["requestId"] = str(uuid.uuid4())
+                            self._body["sessionId"] = self._body.get("sessionId", str(uuid.uuid4()))
+                            self._open_stream()
+                            continue
+                        # Not retryable, yield the first line and continue
+                        yield line
+
+                # Yield remaining lines
+                if self._line_iter is not None:
+                    for raw_line in self._line_iter:
+                        if raw_line:
+                            yield raw_line
+                return
+
+            except (httpx.ConnectError, httpx.ReadError, httpx.WriteError, httpx.PoolTimeout) as exc:
+                if attempt < _MAX_RETRIES:
+                    log.warning("Stream connection error on attempt %d/%d, retrying in %.1fs: %s",
+                                attempt + 1, _MAX_RETRIES, backoff, exc)
+                    self._close_resp()
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, _MAX_BACKOFF)
+                    self._body["requestId"] = str(uuid.uuid4())
+                    self._body["sessionId"] = self._body.get("sessionId", str(uuid.uuid4()))
+                    self._open_stream()
+                    continue
+                raise
