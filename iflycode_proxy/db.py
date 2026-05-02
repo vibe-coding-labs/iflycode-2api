@@ -2,6 +2,7 @@
 
 import json
 import logging
+import secrets
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -13,9 +14,10 @@ DB_PATH = DATA_DIR / "proxy.db"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
-    api_key TEXT PRIMARY KEY,
-    token TEXT NOT NULL,
-    user_id TEXT NOT NULL,
+    account_id TEXT PRIMARY KEY,
+    api_key TEXT NOT NULL UNIQUE,
+    spark_token TEXT NOT NULL,
+    user_id TEXT NOT NULL DEFAULT '',
     is_default INTEGER NOT NULL DEFAULT 0,
     default_model TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -43,6 +45,14 @@ CREATE TABLE IF NOT EXISTS request_logs (
 """
 
 
+def _generate_account_id() -> str:
+    return f"acc-{secrets.token_hex(4)}"
+
+
+def _generate_api_key() -> str:
+    return f"sk-{secrets.token_hex(16)}"
+
+
 class Database:
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = db_path or DB_PATH
@@ -60,16 +70,45 @@ class Database:
         return self._conn
 
     def _migrate(self):
-        """Add columns that may not exist in older databases."""
+        """Migrate old schema (api_key as PK) to new schema (account_id as PK)."""
         conn = self._conn
-        try:
-            conn.execute("ALTER TABLE request_logs ADD COLUMN prompt_tokens INTEGER DEFAULT 0")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            conn.execute("ALTER TABLE request_logs ADD COLUMN completion_tokens INTEGER DEFAULT 0")
-        except sqlite3.OperationalError:
-            pass
+        # Check if migration is needed by looking for account_id column
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()]
+        if "account_id" in cols:
+            return
+
+        log.info("Migrating accounts table: api_key PK -> account_id PK")
+        # Old table has: api_key (PK), token, user_id, is_default, default_model, created_at, updated_at
+        # We need to:
+        # 1. Read all existing data
+        # 2. Drop old table
+        # 3. Create new table
+        # 4. Insert migrated data
+
+        rows = conn.execute("SELECT api_key, token, user_id, is_default, default_model, created_at, updated_at FROM accounts").fetchall()
+
+        conn.execute("DROP TABLE IF EXISTS accounts")
+        conn.executescript(SCHEMA)
+
+        from iflycode_proxy.crypto import encrypt
+        for r in rows:
+            old_api_key = r["api_key"]
+            token = r["token"]
+            account_id = f"acc-{old_api_key[:8]}" if old_api_key else _generate_account_id()
+            api_key = _generate_api_key()
+            user_id = r["user_id"] or ""
+            is_default = r["is_default"]
+            default_model = r["default_model"] or ""
+            created_at = r["created_at"]
+            updated_at = r["updated_at"]
+            # token is already encrypted from old schema
+            conn.execute(
+                "INSERT INTO accounts (account_id, api_key, spark_token, user_id, is_default, default_model, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (account_id, api_key, token, user_id, is_default, default_model, created_at, updated_at),
+            )
+        conn.commit()
+        log.info("Migration complete: %d accounts migrated", len(rows))
 
     def close(self):
         if self._conn:
@@ -78,42 +117,57 @@ class Database:
 
     # -- Account CRUD --
 
-    def add_account(self, api_key: str, token: str, user_id: str,
+    def add_account(self, account_id: str, api_key: str, spark_token: str, user_id: str,
                     is_default: bool = False, default_model: str = ""):
         from iflycode_proxy.crypto import encrypt
         conn = self._get_conn()
         if is_default:
             conn.execute("UPDATE accounts SET is_default = 0")
-        encrypted_token = encrypt(token)
+        encrypted_token = encrypt(spark_token)
         conn.execute(
-            "INSERT OR REPLACE INTO accounts (api_key, token, user_id, is_default, default_model, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, datetime('now'))",
-            (api_key, encrypted_token, user_id, 1 if is_default else 0, default_model),
+            "INSERT OR REPLACE INTO accounts (account_id, api_key, spark_token, user_id, is_default, default_model, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+            (account_id, api_key, encrypted_token, user_id, 1 if is_default else 0, default_model),
         )
         conn.commit()
-        log.info("Account saved: api_key=%s user_id=%s", api_key, user_id)
+        log.info("Account saved: account_id=%s api_key=%s user_id=%s", account_id, api_key[:8] + "...", user_id)
 
-    def update_account_model(self, api_key: str, default_model: str):
+    def update_account_model(self, account_id: str, default_model: str):
         conn = self._get_conn()
         conn.execute(
-            "UPDATE accounts SET default_model = ?, updated_at = datetime('now') WHERE api_key = ?",
-            (default_model, api_key),
+            "UPDATE accounts SET default_model = ?, updated_at = datetime('now') WHERE account_id = ?",
+            (default_model, account_id),
         )
         conn.commit()
 
-    def remove_account(self, api_key: str) -> bool:
+    def renew_api_key(self, account_id: str) -> Optional[str]:
         conn = self._get_conn()
-        cursor = conn.execute("DELETE FROM accounts WHERE api_key = ?", (api_key,))
+        row = conn.execute("SELECT 1 FROM accounts WHERE account_id = ?", (account_id,)).fetchone()
+        if not row:
+            return None
+        new_key = _generate_api_key()
+        conn.execute(
+            "UPDATE accounts SET api_key = ?, updated_at = datetime('now') WHERE account_id = ?",
+            (new_key, account_id),
+        )
+        conn.commit()
+        log.info("API key renewed for account_id=%s", account_id)
+        return new_key
+
+    def remove_account(self, account_id: str) -> bool:
+        conn = self._get_conn()
+        cursor = conn.execute("DELETE FROM accounts WHERE account_id = ?", (account_id,))
         conn.commit()
         return cursor.rowcount > 0
 
     def list_accounts(self) -> List[Dict[str, Any]]:
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT api_key, user_id, is_default, default_model, created_at FROM accounts ORDER BY created_at"
+            "SELECT account_id, api_key, user_id, is_default, default_model, created_at FROM accounts ORDER BY created_at"
         ).fetchall()
         return [
             {
+                "account_id": r["account_id"],
                 "api_key": r["api_key"],
                 "user_id": r["user_id"],
                 "is_default": bool(r["is_default"]),
@@ -123,60 +177,87 @@ class Database:
             for r in rows
         ]
 
-    def get_account(self, api_key: str) -> Optional[Dict[str, Any]]:
+    def get_account(self, account_id: str) -> Optional[Dict[str, Any]]:
         from iflycode_proxy.crypto import decrypt, is_encrypted
         conn = self._get_conn()
         row = conn.execute(
-            "SELECT api_key, token, user_id, is_default, default_model FROM accounts WHERE api_key = ?",
+            "SELECT account_id, api_key, spark_token, user_id, is_default, default_model FROM accounts WHERE account_id = ?",
+            (account_id,),
+        ).fetchone()
+        if not row:
+            return None
+        spark_token = row["spark_token"]
+        if is_encrypted(spark_token):
+            spark_token = decrypt(spark_token)
+        return {
+            "account_id": row["account_id"],
+            "api_key": row["api_key"],
+            "spark_token": spark_token,
+            "user_id": row["user_id"],
+            "is_default": bool(row["is_default"]),
+            "default_model": row["default_model"] or "",
+        }
+
+    def get_account_by_api_key(self, api_key: str) -> Optional[Dict[str, Any]]:
+        from iflycode_proxy.crypto import decrypt, is_encrypted
+        conn = self._get_conn()
+        row = conn.execute(
+            "SELECT account_id, api_key, spark_token, user_id, is_default, default_model FROM accounts WHERE api_key = ?",
             (api_key,),
         ).fetchone()
         if not row:
             return None
-        token = row["token"]
-        if is_encrypted(token):
-            token = decrypt(token)
+        spark_token = row["spark_token"]
+        if is_encrypted(spark_token):
+            spark_token = decrypt(spark_token)
         return {
+            "account_id": row["account_id"],
             "api_key": row["api_key"],
-            "token": token,
+            "spark_token": spark_token,
             "user_id": row["user_id"],
             "is_default": bool(row["is_default"]),
             "default_model": row["default_model"] or "",
         }
 
     def get_default_account(self) -> Optional[Dict[str, Any]]:
+        from iflycode_proxy.crypto import decrypt, is_encrypted
         conn = self._get_conn()
         row = conn.execute(
-            "SELECT api_key, token, user_id FROM accounts WHERE is_default = 1"
+            "SELECT account_id, api_key, spark_token, user_id FROM accounts WHERE is_default = 1"
         ).fetchone()
         if not row:
             row = conn.execute(
-                "SELECT api_key, token, user_id FROM accounts ORDER BY created_at LIMIT 1"
+                "SELECT account_id, api_key, spark_token, user_id FROM accounts ORDER BY created_at LIMIT 1"
             ).fetchone()
         if not row:
             return None
-        from iflycode_proxy.crypto import decrypt, is_encrypted
-        token = row["token"]
-        if is_encrypted(token):
-            token = decrypt(token)
-        return {"api_key": row["api_key"], "token": token, "user_id": row["user_id"]}
+        spark_token = row["spark_token"]
+        if is_encrypted(spark_token):
+            spark_token = decrypt(spark_token)
+        return {
+            "account_id": row["account_id"],
+            "api_key": row["api_key"],
+            "spark_token": spark_token,
+            "user_id": row["user_id"],
+        }
 
-    def set_default(self, api_key: str) -> bool:
+    def set_default(self, account_id: str) -> bool:
         conn = self._get_conn()
-        row = conn.execute("SELECT 1 FROM accounts WHERE api_key = ?", (api_key,)).fetchone()
+        row = conn.execute("SELECT 1 FROM accounts WHERE account_id = ?", (account_id,)).fetchone()
         if not row:
             return False
         conn.execute("UPDATE accounts SET is_default = 0")
-        conn.execute("UPDATE accounts SET is_default = 1, updated_at = datetime('now') WHERE api_key = ?", (api_key,))
+        conn.execute("UPDATE accounts SET is_default = 1, updated_at = datetime('now') WHERE account_id = ?", (account_id,))
         conn.commit()
         return True
 
-    def validate_account(self, api_key: str) -> bool:
-        acc = self.get_account(api_key)
+    def validate_account(self, account_id: str) -> bool:
+        acc = self.get_account(account_id)
         if not acc:
             return False
         from iflycode_proxy.client import Client
         try:
-            client = Client(acc["token"], acc.get("user_id", ""))
+            client = Client(acc["spark_token"], acc.get("user_id", ""))
             valid = client.validate()
             client.close()
             return valid
@@ -278,38 +359,56 @@ class Database:
             "completion_tokens": token_row["ct"],
         }
 
-    def get_account_stats(self, api_key: str) -> Dict[str, Any]:
+    def get_account_stats(self, account_id: str) -> Dict[str, Any]:
         conn = self._get_conn()
+        # Get api_key for this account (used as log key)
+        acc = self.get_account(account_id)
+        log_key = acc["api_key"] if acc else account_id
         total = conn.execute(
-            "SELECT COUNT(*) as cnt FROM request_logs WHERE api_key = ?", (api_key,)
+            "SELECT COUNT(*) as cnt FROM request_logs WHERE api_key = ?", (log_key,)
         ).fetchone()["cnt"]
         by_model = conn.execute(
             "SELECT model, COUNT(*) as cnt FROM request_logs WHERE api_key = ? GROUP BY model ORDER BY cnt DESC",
-            (api_key,),
+            (log_key,),
         ).fetchall()
         avg_latency = conn.execute(
             "SELECT AVG(latency_ms) as avg FROM request_logs WHERE api_key = ? AND latency_ms > 0",
-            (api_key,),
+            (log_key,),
         ).fetchone()["avg"]
         by_endpoint = conn.execute(
             "SELECT endpoint, COUNT(*) as cnt FROM request_logs WHERE api_key = ? GROUP BY endpoint ORDER BY cnt DESC",
-            (api_key,),
+            (log_key,),
         ).fetchall()
         stream_count = conn.execute(
             "SELECT COUNT(*) as cnt FROM request_logs WHERE api_key = ? AND stream = 1",
-            (api_key,),
+            (log_key,),
         ).fetchone()["cnt"]
         error_count = conn.execute(
             "SELECT COUNT(*) as cnt FROM request_logs WHERE api_key = ? AND status_code >= 400",
-            (api_key,),
+            (log_key,),
         ).fetchone()["cnt"]
         token_row = conn.execute(
             "SELECT COALESCE(SUM(prompt_tokens),0) as pt, COALESCE(SUM(completion_tokens),0) as ct "
             "FROM request_logs WHERE api_key = ?",
-            (api_key,),
+            (log_key,),
+        ).fetchone()
+        # Today's stats
+        today_requests = conn.execute(
+            "SELECT COUNT(*) as cnt FROM request_logs WHERE api_key = ? AND date(created_at) = date('now')",
+            (log_key,),
+        ).fetchone()["cnt"]
+        today_errors = conn.execute(
+            "SELECT COUNT(*) as cnt FROM request_logs WHERE api_key = ? AND status_code >= 400 AND date(created_at) = date('now')",
+            (log_key,),
+        ).fetchone()["cnt"]
+        # 24h token consumption
+        token_24h = conn.execute(
+            "SELECT COALESCE(SUM(prompt_tokens),0) as pt, COALESCE(SUM(completion_tokens),0) as ct "
+            "FROM request_logs WHERE api_key = ? AND created_at >= datetime('now', '-24 hours')",
+            (log_key,),
         ).fetchone()
         return {
-            "api_key": api_key,
+            "account_id": account_id,
             "total_requests": total,
             "by_model": [{"model": r["model"], "count": r["cnt"]} for r in by_model],
             "by_endpoint": [{"endpoint": r["endpoint"], "count": r["cnt"]} for r in by_endpoint],
@@ -318,15 +417,51 @@ class Database:
             "error_count": error_count,
             "prompt_tokens": token_row["pt"],
             "completion_tokens": token_row["ct"],
+            "today_requests": today_requests,
+            "today_errors": today_errors,
+            "today_success_rate": round((today_requests - today_errors) / today_requests * 100, 1) if today_requests > 0 else 0.0,
+            "prompt_tokens_24h": token_24h["pt"],
+            "completion_tokens_24h": token_24h["ct"],
         }
 
-    def get_account_models(self, api_key: str) -> List[Dict]:
-        acc = self.get_account(api_key)
+    def get_account_hourly_stats(self, account_id: str, hours: int = 24) -> List[Dict[str, Any]]:
+        """Return hourly request and token stats for the last N hours."""
+        conn = self._get_conn()
+        acc = self.get_account(account_id)
+        log_key = acc["api_key"] if acc else account_id
+        rows = conn.execute(
+            "SELECT strftime('%Y-%m-%d %H:00', created_at) as hour, "
+            "  COUNT(*) as request_count, "
+            "  SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as error_count, "
+            "  AVG(CASE WHEN latency_ms > 0 THEN latency_ms END) as avg_latency_ms, "
+            "  COALESCE(SUM(prompt_tokens), 0) as prompt_tokens, "
+            "  COALESCE(SUM(completion_tokens), 0) as completion_tokens "
+            "FROM request_logs WHERE api_key = ? AND created_at >= datetime('now', ?) "
+            "GROUP BY hour ORDER BY hour",
+            (log_key, f"-{hours} hours"),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_account_recent_logs(self, account_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Return the most recent request logs for an account."""
+        conn = self._get_conn()
+        acc = self.get_account(account_id)
+        log_key = acc["api_key"] if acc else account_id
+        rows = conn.execute(
+            "SELECT id, model, endpoint, stream, status_code, latency_ms, "
+            "  prompt_tokens, completion_tokens, created_at "
+            "FROM request_logs WHERE api_key = ? ORDER BY id DESC LIMIT ?",
+            (log_key, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_account_models(self, account_id: str) -> List[Dict]:
+        acc = self.get_account(account_id)
         if not acc:
             return []
         from iflycode_proxy.client import Client
         try:
-            client = Client(acc["token"], acc.get("user_id", ""))
+            client = Client(acc["spark_token"], acc.get("user_id", ""))
             models_data = client.list_models()
             client.close()
             result = []
@@ -348,10 +483,10 @@ class Database:
         from iflycode_proxy.credential_router import CredentialRouter
         router = CredentialRouter()
         for acc in self.list_accounts():
-            full = self.get_account(acc["api_key"])
+            full = self.get_account(acc["account_id"])
             if full:
                 router.add_account(
-                    full["api_key"], full["token"], full.get("user_id", ""),
+                    full["account_id"], full["api_key"], full["spark_token"], full.get("user_id", ""),
                     default=full["is_default"],
                     default_model=full.get("default_model", ""),
                 )
