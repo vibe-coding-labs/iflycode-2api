@@ -2,16 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Col, Row, Statistic, Typography, Spin, Select, Button,
-  Breadcrumb, Space, Tag, Table, message, Popover, Divider,
+  Space, Tag, Table, message, Popover, Divider, Tooltip as AntTooltip,
 } from 'antd';
 import {
   ArrowLeftOutlined, ApiOutlined, ThunderboltOutlined,
   CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined,
-  CopyOutlined,
+  CopyOutlined, QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AnthropicIcon, OpenAIIcon } from '../components/BrandIcons';
-import { SPARK_MODELS, getModelByDomain, formatContextLength } from '../data/sparkModels';
+import { SPARK_MODELS, getModelByDomain, formatContextLength, TIER_EXPLANATION } from '../data/sparkModels';
 import { api } from '../api';
 
 interface AccountStats {
@@ -230,9 +230,12 @@ const AccountDetail: React.FC = () => {
 
           {/* Right: model catalog table */}
           <Col xs={24} md={16}>
-            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-              可用模型（已授权模型可设为默认）
-            </Typography.Text>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>可用模型</Typography.Text>
+              <AntTooltip title={TIER_EXPLANATION} overlayStyle={{ maxWidth: 360 }}>
+                <QuestionCircleOutlined style={{ color: '#999', fontSize: 13, cursor: 'pointer' }} />
+              </AntTooltip>
+            </div>
             <Table
               dataSource={SPARK_MODELS.map(m => {
                 const authorized = models.find(am => am.modelCode === m.domain);
@@ -249,7 +252,17 @@ const AccountDetail: React.FC = () => {
                     </Space>
                   ),
                 },
-                { title: '上下文', key: 'context', width: 70, render: (_: unknown, record: any) => formatContextLength(record.contextLength) },
+                {
+                  title: '等级',
+                  key: 'tier',
+                  width: 70,
+                  render: (_: unknown, record: any) => {
+                    if (record.tier === 'free') return <Tag color="green">免费</Tag>;
+                    if (record.tier === 'premium') return <Tag color="gold">旗舰版</Tag>;
+                    return <Tag color="blue">专业版</Tag>;
+                  },
+                },
+                { title: '上下文', key: 'context', width: 60, render: (_: unknown, record: any) => formatContextLength(record.contextLength) },
                 {
                   title: '能力',
                   key: 'capabilities',
