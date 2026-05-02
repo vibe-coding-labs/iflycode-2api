@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Col, Row, Statistic, Typography, Spin, Select, Button,
-  Breadcrumb, Space, Tag, Table, message, Popover,
+  Breadcrumb, Space, Tag, Table, message, Popover, Divider,
 } from 'antd';
 import {
   ArrowLeftOutlined, ApiOutlined, ThunderboltOutlined,
@@ -12,7 +12,6 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AnthropicIcon, OpenAIIcon } from '../components/BrandIcons';
 import { SPARK_MODELS, getModelByDomain, formatContextLength } from '../data/sparkModels';
-import type { SparkModelInfo } from '../data/sparkModels';
 import { api } from '../api';
 
 interface AccountStats {
@@ -161,15 +160,8 @@ const AccountDetail: React.FC = () => {
 
   return (
     <div>
-      <Breadcrumb
-        style={{ marginBottom: 16 }}
-        items={[
-          { title: <a onClick={() => navigate('/accounts')}>账号管理</a> },
-          { title: decodedKey },
-        ]}
-      />
-
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Space>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/accounts')}>返回</Button>
           <Typography.Title level={4} style={{ margin: 0 }}>{decodedKey}</Typography.Title>
@@ -178,38 +170,38 @@ const AccountDetail: React.FC = () => {
         <Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
       </div>
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} md={6}>
-          <Card><Statistic title="总请求数" value={stats?.total_requests || 0} prefix={<ApiOutlined />} /></Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card><Statistic title="平均延迟" value={stats?.avg_latency_ms || 0} suffix="ms" prefix={<ThunderboltOutlined />} /></Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card><Statistic title="成功率" value={successRate} suffix="%" prefix={<CheckCircleOutlined />} valueStyle={{ color: '#52c41a' }} /></Card>
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <Card><Statistic title="错误请求" value={stats?.error_count || 0} prefix={<CloseCircleOutlined />} valueStyle={{ color: '#ff4d4f' }} /></Card>
-        </Col>
-      </Row>
+      {/* 1. Overview — all stats in one card */}
+      <Card title="使用概览" style={{ marginBottom: 16 }}>
+        <Row gutter={[16, 12]}>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic title="总请求" value={stats?.total_requests || 0} prefix={<ApiOutlined />} />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic title="成功率" value={successRate} suffix="%" prefix={<CheckCircleOutlined />} valueStyle={{ color: '#52c41a' }} />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic title="平均延迟" value={stats?.avg_latency_ms || 0} suffix="ms" prefix={<ThunderboltOutlined />} />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic title="错误" value={stats?.error_count || 0} prefix={<CloseCircleOutlined />} valueStyle={{ color: stats?.error_count ? '#ff4d4f' : undefined }} />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic title="Prompt Tokens" value={stats?.prompt_tokens || 0} valueStyle={{ color: '#1677ff', fontSize: 16 }} />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic title="Completion Tokens" value={stats?.completion_tokens || 0} valueStyle={{ color: '#722ed1', fontSize: 16 }} />
+          </Col>
+        </Row>
+      </Card>
 
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} sm={12} md={8}>
-          <Card><Statistic title="Prompt Tokens" value={stats?.prompt_tokens || 0} valueStyle={{ color: '#1677ff' }} /></Card>
-        </Col>
-        <Col xs={24} sm={12} md={8}>
-          <Card><Statistic title="Completion Tokens" value={stats?.completion_tokens || 0} valueStyle={{ color: '#722ed1' }} /></Card>
-        </Col>
-        <Col xs={24} sm={12} md={8}>
-          <Card><Statistic title="流式请求" value={stats?.stream_count || 0} /></Card>
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} md={12}>
-          <Card title="默认模型">
+      {/* 2. Model & Account — default model + account info + model catalog in ONE card */}
+      <Card title="模型与账号" style={{ marginBottom: 16 }}>
+        <Row gutter={[24, 16]}>
+          {/* Left: default model + account info */}
+          <Col xs={24} md={8}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>默认模型</Typography.Text>
             <Select
-              style={{ width: '100%' }}
+              style={{ width: '100%', marginTop: 4 }}
               placeholder="使用服务器默认模型"
               allowClear
               value={selectedModel || undefined}
@@ -222,22 +214,74 @@ const AccountDetail: React.FC = () => {
                 }),
               ]}
             />
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card title="账号信息">
-            <Typography.Text type="secondary">用户 ID: </Typography.Text>
-            <Typography.Text>{info.user_id || '未设置'}</Typography.Text>
-            <br />
-            <Typography.Text type="secondary">创建时间: </Typography.Text>
-            <Typography.Text>{info.created_at || '未知'}</Typography.Text>
-          </Card>
-        </Col>
-      </Row>
 
-      <Card title="启动命令" style={{ marginTop: 16 }}>
+            <Divider style={{ margin: '16px 0 12px' }} />
+
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>用户 ID</Typography.Text>
+              <Typography.Text>{info.user_id || '未设置'}</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>创建时间</Typography.Text>
+              <Typography.Text>{info.created_at || '未知'}</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>流式请求数</Typography.Text>
+              <Typography.Text>{stats?.stream_count || 0}</Typography.Text>
+            </Space>
+          </Col>
+
+          {/* Right: model catalog table */}
+          <Col xs={24} md={16}>
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+              可用模型（已授权模型可设为默认）
+            </Typography.Text>
+            <Table
+              dataSource={SPARK_MODELS.map(m => {
+                const authorized = models.find(am => am.modelCode === m.domain);
+                return { ...m, authorized: !!authorized, tokenExhausted: authorized?.tokenExhausted || false, key: m.domain };
+              }) as any}
+              columns={[
+                {
+                  title: '模型',
+                  key: 'name',
+                  render: (_: unknown, record: any) => (
+                    <Space direction="vertical" size={0}>
+                      <Typography.Text strong>{record.name}</Typography.Text>
+                      <Typography.Text type="secondary" style={{ fontSize: 11 }}>{record.domain}</Typography.Text>
+                    </Space>
+                  ),
+                },
+                { title: '上下文', key: 'context', width: 70, render: (_: unknown, record: any) => formatContextLength(record.contextLength) },
+                {
+                  title: '能力',
+                  key: 'capabilities',
+                  render: (_: unknown, record: any) => (
+                    <Space size={[4, 4]} wrap>
+                      {record.capabilities.slice(0, 2).map((c: string) => <Tag key={c} color="blue" style={{ fontSize: 11 }}>{c}</Tag>)}
+                      {record.capabilities.length > 2 && <Tag style={{ fontSize: 11 }}>+{record.capabilities.length - 2}</Tag>}
+                    </Space>
+                  ),
+                },
+                {
+                  title: '状态',
+                  key: 'status',
+                  width: 80,
+                  render: (_: unknown, record: any) => {
+                    if (record.status === 'deprecated') return <Tag color="orange">下线</Tag>;
+                    if (record.authorized && record.tokenExhausted) return <Tag color="red">用尽</Tag>;
+                    if (record.authorized) return <Tag color="green">已授权</Tag>;
+                    return <Tag>未授权</Tag>;
+                  },
+                },
+              ]}
+              pagination={false}
+              size="small"
+            />
+          </Col>
+        </Row>
+      </Card>
+
+      {/* 3. Startup Commands */}
+      <Card title="启动命令" style={{ marginBottom: 16 }}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          点击图标复制启动命令，环境变量会自动将请求路由到此账号。
+          点击按钮复制启动命令，环境变量会自动将请求路由到此账号。
         </Typography.Paragraph>
         <Space size="middle">
           <Popover
@@ -267,97 +311,42 @@ const AccountDetail: React.FC = () => {
         </Space>
       </Card>
 
-      {stats && stats.by_model.length > 0 && (
-        <Card title="模型使用分布" style={{ marginTop: 16 }}>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={stats.by_model}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="model" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="count" name="请求次数" fill="#1677ff" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+      {/* 4. Analytics — chart + endpoint table in one card */}
+      {(stats && (stats.by_model.length > 0 || stats.by_endpoint.length > 0)) && (
+        <Card title="使用分析" style={{ marginBottom: 16 }}>
+          <Row gutter={[24, 16]}>
+            {stats.by_model.length > 0 && (
+              <Col xs={24} md={14}>
+                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>模型使用分布</Typography.Text>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={stats.by_model}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="model" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="count" name="请求次数" fill="#1677ff" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Col>
+            )}
+            {stats.by_endpoint.length > 0 && (
+              <Col xs={24} md={10}>
+                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>端点调用统计</Typography.Text>
+                <Table
+                  dataSource={stats.by_endpoint}
+                  columns={[
+                    { title: '端点', dataIndex: 'endpoint', key: 'endpoint' },
+                    { title: '调用次数', dataIndex: 'count', key: 'count', width: 80 },
+                  ]}
+                  rowKey="endpoint"
+                  pagination={false}
+                  size="small"
+                />
+              </Col>
+            )}
+          </Row>
         </Card>
       )}
-
-      {stats && stats.by_endpoint.length > 0 && (
-        <Card title="端点调用统计" style={{ marginTop: 16 }}>
-          <Table
-            dataSource={stats.by_endpoint}
-            columns={[
-              { title: '端点', dataIndex: 'endpoint', key: 'endpoint' },
-              { title: '调用次数', dataIndex: 'count', key: 'count' },
-            ]}
-            rowKey="endpoint"
-            pagination={false}
-            size="small"
-          />
-        </Card>
-      )}
-
-      <Card title="可用模型" style={{ marginTop: 16 }}>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          以下为 iFlyCode/SparkDesk 支持的模型列表。已授权模型可设置为默认模型。
-        </Typography.Paragraph>
-        <Table
-          dataSource={SPARK_MODELS.map(m => {
-            const authorized = models.find(am => am.modelCode === m.domain);
-            return {
-              ...m,
-              authorized: !!authorized,
-              tokenExhausted: authorized?.tokenExhausted || false,
-              key: m.domain,
-            };
-          }) as any}
-          columns={[
-            {
-              title: '模型',
-              key: 'name',
-              render: (_: unknown, record: any) => (
-                <Space direction="vertical" size={0}>
-                  <Typography.Text strong>{record.name}</Typography.Text>
-                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>domain: {record.domain}</Typography.Text>
-                </Space>
-              ),
-            },
-            {
-              title: '参数量',
-              dataIndex: 'params',
-              key: 'params',
-              width: 100,
-            },
-            {
-              title: '上下文',
-              key: 'context',
-              width: 80,
-              render: (_: unknown, record: any) => formatContextLength(record.contextLength),
-            },
-            {
-              title: '能力',
-              key: 'capabilities',
-              render: (_: unknown, record: any) => (
-                <Space size={[4, 4]} wrap>
-                  {record.capabilities.map((c: string) => <Tag key={c} color="blue">{c}</Tag>)}
-                </Space>
-              ),
-            },
-            {
-              title: '状态',
-              key: 'status',
-              width: 100,
-              render: (_: unknown, record: any) => {
-                if (record.status === 'deprecated') return <Tag color="orange">即将下线</Tag>;
-                if (record.authorized && record.tokenExhausted) return <Tag color="red">次数已用尽</Tag>;
-                if (record.authorized) return <Tag color="green">已授权</Tag>;
-                return <Tag>未授权</Tag>;
-              },
-            },
-          ]}
-          pagination={false}
-          size="small"
-        />
-      </Card>
     </div>
   );
 };
