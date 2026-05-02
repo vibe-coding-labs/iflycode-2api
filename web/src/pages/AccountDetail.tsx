@@ -262,6 +262,7 @@ const AccountDetail: React.FC = () => {
                     return <Tag color="blue">专业版</Tag>;
                   },
                 },
+                { title: '参数量', dataIndex: 'params', key: 'params', width: 100 },
                 { title: '上下文', key: 'context', width: 60, render: (_: unknown, record: any) => formatContextLength(record.contextLength) },
                 {
                   title: '能力',

@@ -16,7 +16,7 @@ export const SPARK_MODELS: SparkModelInfo[] = [
   {
     domain: '4.0Ultra',
     name: '星火 4.0 Ultra',
-    params: '未公开',
+    params: '~293B (MoE, 激活~30B)',
     contextLength: 32768,
     maxOutput: 32768,
     description: '最新旗舰模型，已升级至 X1.5 快思考模式，推荐使用',
@@ -28,7 +28,7 @@ export const SPARK_MODELS: SparkModelInfo[] = [
   {
     domain: 'max-32k',
     name: '星火 Max-32K',
-    params: '未公开',
+    params: '~100B+',
     contextLength: 32768,
     maxOutput: 32768,
     description: 'Max 长上下文版本，32K 上下文窗口（即将下线）',
@@ -41,7 +41,7 @@ export const SPARK_MODELS: SparkModelInfo[] = [
   {
     domain: 'generalv3.5',
     name: '星火 Max',
-    params: '未公开',
+    params: '~100B+',
     contextLength: 8192,
     maxOutput: 8192,
     description: 'Max 标准版本（即将下线）',
@@ -54,7 +54,7 @@ export const SPARK_MODELS: SparkModelInfo[] = [
   {
     domain: 'pro-128k',
     name: '星火 Pro-128K',
-    params: '未公开',
+    params: '~30B',
     contextLength: 131072,
     maxOutput: 131072,
     description: 'Pro 长上下文版本，128K 上下文窗口',
@@ -66,7 +66,7 @@ export const SPARK_MODELS: SparkModelInfo[] = [
   {
     domain: 'generalv3',
     name: '星火 Pro',
-    params: '未公开',
+    params: '~30B',
     contextLength: 8192,
     maxOutput: 8192,
     description: 'Pro 标准版本',
@@ -78,7 +78,7 @@ export const SPARK_MODELS: SparkModelInfo[] = [
   {
     domain: 'lite',
     name: '星火 Lite',
-    params: '未公开',
+    params: '~10B',
     contextLength: 4096,
     maxOutput: 8192,
     description: '轻量免费版本，适合简单任务',
@@ -90,7 +90,7 @@ export const SPARK_MODELS: SparkModelInfo[] = [
   {
     domain: 'kjwx',
     name: '科技文献大模型',
-    params: '未公开',
+    params: '~30B',
     contextLength: 0,
     maxOutput: 0,
     description: '针对学术论文问答、写作和垂直领域优化',
