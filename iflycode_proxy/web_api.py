@@ -6,7 +6,7 @@ from typing import Dict
 from fastapi import APIRouter, HTTPException, Request
 
 from iflycode_proxy.auth import get_login_url, poll_login_status
-from iflycode_proxy.db import Database
+from iflycode_proxy.db import Database, _generate_account_id, _generate_api_key
 
 log = logging.getLogger("iflycode-proxy.web-api")
 
@@ -23,48 +23,68 @@ def create_web_api_router(db: Database) -> APIRouter:
     @router.post("/accounts")
     async def add_account(request: Request):
         body = await request.json()
-        api_key = body.get("api_key", "").strip()
-        token = body.get("token", "").strip()
+        account_id = body.get("account_id", "").strip() or _generate_account_id()
+        api_key = body.get("api_key", "").strip() or _generate_api_key()
+        spark_token = body.get("spark_token", body.get("token", "")).strip()
         user_id = body.get("user_id", "").strip()
         is_default = body.get("is_default", False)
         default_model = body.get("default_model", "").strip()
-        if not api_key or not token:
-            raise HTTPException(400, "api_key and token are required")
-        db.add_account(api_key, token, user_id, is_default=is_default, default_model=default_model)
-        return {"ok": True, "api_key": api_key}
+        if not spark_token:
+            raise HTTPException(400, "spark_token (or token) is required")
+        db.add_account(account_id, api_key, spark_token, user_id, is_default=is_default, default_model=default_model)
+        return {"ok": True, "account_id": account_id, "api_key": api_key}
 
-    @router.delete("/accounts/{api_key:path}")
-    async def remove_account(api_key: str):
-        if not db.remove_account(api_key):
-            raise HTTPException(404, f"Account '{api_key}' not found")
+    @router.delete("/accounts/{account_id:path}")
+    async def remove_account(account_id: str):
+        if not db.remove_account(account_id):
+            raise HTTPException(404, f"Account '{account_id}' not found")
         return {"ok": True}
 
-    @router.put("/accounts/{api_key:path}/default")
-    async def set_default(api_key: str):
-        if not db.set_default(api_key):
-            raise HTTPException(404, f"Account '{api_key}' not found")
+    @router.put("/accounts/{account_id:path}/default")
+    async def set_default(account_id: str):
+        if not db.set_default(account_id):
+            raise HTTPException(404, f"Account '{account_id}' not found")
         return {"ok": True}
 
-    @router.post("/accounts/{api_key:path}/validate")
-    async def validate_account(api_key: str):
-        valid = db.validate_account(api_key)
-        return {"api_key": api_key, "valid": valid}
+    @router.post("/accounts/{account_id:path}/validate")
+    async def validate_account(account_id: str):
+        valid = db.validate_account(account_id)
+        return {"account_id": account_id, "valid": valid}
 
-    @router.get("/accounts/{api_key:path}/models")
-    async def list_account_models(api_key: str):
-        models = db.get_account_models(api_key)
+    @router.get("/accounts/{account_id:path}/models")
+    async def list_account_models(account_id: str):
+        models = db.get_account_models(account_id)
         return {"models": models}
 
-    @router.put("/accounts/{api_key:path}/model")
-    async def update_account_model(api_key: str, request: Request):
+    @router.put("/accounts/{account_id:path}/model")
+    async def update_account_model(account_id: str, request: Request):
         body = await request.json()
         default_model = body.get("default_model", "").strip()
-        db.update_account_model(api_key, default_model)
-        return {"ok": True, "api_key": api_key, "default_model": default_model}
+        db.update_account_model(account_id, default_model)
+        return {"ok": True, "account_id": account_id, "default_model": default_model}
 
-    @router.get("/accounts/{api_key:path}/stats")
-    async def get_account_stats(api_key: str):
-        return db.get_account_stats(api_key)
+    @router.get("/accounts/{account_id:path}/stats")
+    async def get_account_stats(account_id: str):
+        return db.get_account_stats(account_id)
+
+    @router.get("/accounts/{account_id:path}/hourly-stats")
+    async def get_account_hourly_stats(account_id: str, hours: int = 24):
+        if hours < 1 or hours > 720:
+            hours = 24
+        return {"hours": hours, "data": db.get_account_hourly_stats(account_id, hours)}
+
+    @router.get("/accounts/{account_id:path}/recent-logs")
+    async def get_account_recent_logs(account_id: str, limit: int = 20):
+        if limit < 1 or limit > 100:
+            limit = 20
+        return {"logs": db.get_account_recent_logs(account_id, limit)}
+
+    @router.post("/accounts/{account_id:path}/renew-key")
+    async def renew_api_key(account_id: str):
+        new_key = db.renew_api_key(account_id)
+        if not new_key:
+            raise HTTPException(404, f"Account '{account_id}' not found")
+        return {"ok": True, "account_id": account_id, "api_key": new_key}
 
     # -- SSO Auth --
 
@@ -86,14 +106,13 @@ def create_web_api_router(db: Database) -> APIRouter:
         body = await request.json()
         token = body.get("token", "").strip()
         user_id = body.get("user_id", "").strip()
-        api_key = body.get("api_key", "").strip()
         if not token:
             raise HTTPException(400, "token is required")
-        if not api_key:
-            api_key = f"sso-{user_id}" if user_id else f"sso-{token[:8]}"
+        account_id = _generate_account_id()
+        api_key = _generate_api_key()
         is_default = body.get("is_default", False)
-        db.add_account(api_key, token, user_id, is_default=is_default)
-        return {"ok": True, "api_key": api_key}
+        db.add_account(account_id, api_key, token, user_id, is_default=is_default)
+        return {"ok": True, "account_id": account_id, "api_key": api_key}
 
     # -- Settings --
 
