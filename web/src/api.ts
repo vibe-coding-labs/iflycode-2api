@@ -1,4 +1,5 @@
 export interface Account {
+  account_id: string;
   api_key: string;
   user_id: string;
   is_default: boolean;
@@ -15,7 +16,7 @@ export interface Stats {
 }
 
 export interface AccountStats {
-  api_key: string;
+  account_id: string;
   total_requests: number;
   by_model: { model: string; count: number }[];
   by_endpoint: { endpoint: string; count: number }[];
@@ -24,6 +25,37 @@ export interface AccountStats {
   error_count: number;
   prompt_tokens: number;
   completion_tokens: number;
+  today_requests: number;
+  today_errors: number;
+  today_success_rate: number;
+  prompt_tokens_24h: number;
+  completion_tokens_24h: number;
+}
+
+export interface HourlyStatsPoint {
+  hour: string;
+  request_count: number;
+  error_count: number;
+  avg_latency_ms: number | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
+export interface HourlyStats {
+  hours: number;
+  data: HourlyStatsPoint[];
+}
+
+export interface RecentLogEntry {
+  id: number;
+  model: string;
+  endpoint: string;
+  stream: number;
+  status_code: number;
+  latency_ms: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  created_at: string;
 }
 
 export interface LogEntry {
@@ -49,23 +81,33 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return resp.json();
 }
 
+function enc(s: string) {
+  return encodeURIComponent(s);
+}
+
 export const api = {
   // Accounts
   listAccounts: () => request<{ accounts: Account[] }>('/api/accounts').then(r => r.accounts),
-  addAccount: (data: { api_key: string; token: string; user_id?: string; is_default?: boolean }) =>
-    request<{ ok: boolean }>('/api/accounts', { method: 'POST', body: JSON.stringify(data) }),
-  removeAccount: (apiKey: string) =>
-    request<{ ok: boolean }>(`/api/accounts/${encodeURIComponent(apiKey)}`, { method: 'DELETE' }),
-  setDefault: (apiKey: string) =>
-    request<{ ok: boolean }>(`/api/accounts/${encodeURIComponent(apiKey)}/default`, { method: 'PUT' }),
-  validateAccount: (apiKey: string) =>
-    request<{ valid: boolean }>(`/api/accounts/${encodeURIComponent(apiKey)}/validate`, { method: 'POST' }),
-  getAccountStats: (apiKey: string) =>
-    request<AccountStats>(`/api/accounts/${encodeURIComponent(apiKey)}/stats`),
-  getAccountModels: (apiKey: string) =>
-    request<{ models: { modelCode: string; modelName: string; modelId: string; checked: boolean; tokenExhausted: boolean }[] }>(`/api/accounts/${encodeURIComponent(apiKey)}/models`).then(r => r.models || []),
-  updateAccountModel: (apiKey: string, model: string) =>
-    request<{ ok: boolean }>(`/api/accounts/${encodeURIComponent(apiKey)}/model`, { method: 'PUT', body: JSON.stringify({ default_model: model }) }),
+  addAccount: (data: { account_id?: string; api_key?: string; spark_token: string; user_id?: string; is_default?: boolean }) =>
+    request<{ ok: boolean; account_id: string; api_key: string }>('/api/accounts', { method: 'POST', body: JSON.stringify(data) }),
+  removeAccount: (accountId: string) =>
+    request<{ ok: boolean }>(`/api/accounts/${enc(accountId)}`, { method: 'DELETE' }),
+  setDefault: (accountId: string) =>
+    request<{ ok: boolean }>(`/api/accounts/${enc(accountId)}/default`, { method: 'PUT' }),
+  validateAccount: (accountId: string) =>
+    request<{ valid: boolean }>(`/api/accounts/${enc(accountId)}/validate`, { method: 'POST' }),
+  getAccountStats: (accountId: string) =>
+    request<AccountStats>(`/api/accounts/${enc(accountId)}/stats`),
+  getAccountModels: (accountId: string) =>
+    request<{ models: { modelCode: string; modelName: string; modelId: string; checked: boolean; tokenExhausted: boolean }[] }>(`/api/accounts/${enc(accountId)}/models`).then(r => r.models || []),
+  updateAccountModel: (accountId: string, model: string) =>
+    request<{ ok: boolean }>(`/api/accounts/${enc(accountId)}/model`, { method: 'PUT', body: JSON.stringify({ default_model: model }) }),
+  renewApiKey: (accountId: string) =>
+    request<{ ok: boolean; account_id: string; api_key: string }>(`/api/accounts/${enc(accountId)}/renew-key`, { method: 'POST' }),
+  getAccountHourlyStats: (accountId: string, hours: number = 24) =>
+    request<HourlyStats>(`/api/accounts/${enc(accountId)}/hourly-stats?hours=${hours}`),
+  getAccountRecentLogs: (accountId: string, limit: number = 20) =>
+    request<{ logs: RecentLogEntry[] }>(`/api/accounts/${enc(accountId)}/recent-logs?limit=${limit}`).then(r => r.logs),
 
   // Stats
   getStats: () => request<Stats>('/api/stats'),
@@ -91,7 +133,7 @@ export const api = {
   getLoginUrl: () =>
     request<{ ok: boolean; login_url: string; client_id: string }>('/api/auth/login-url', { method: 'POST' }),
   pollLoginStatus: (clientId: string) =>
-    request<{ ok: boolean; status: string; token?: string; user_id?: string }>(`/api/auth/login-status?client_id=${encodeURIComponent(clientId)}`),
-  addAccountFromSSO: (data: { token: string; user_id?: string; api_key?: string; is_default?: boolean }) =>
-    request<{ ok: boolean; api_key: string }>('/api/auth/add-from-sso', { method: 'POST', body: JSON.stringify(data) }),
+    request<{ ok: boolean; status: string; token?: string; user_id?: string }>(`/api/auth/login-status?client_id=${enc(clientId)}`),
+  addAccountFromSSO: (data: { token: string; user_id?: string }) =>
+    request<{ ok: boolean; account_id: string; api_key: string }>('/api/auth/add-from-sso', { method: 'POST', body: JSON.stringify(data) }),
 };
