@@ -11,6 +11,8 @@ import {
 } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { AnthropicIcon, OpenAIIcon } from '../components/BrandIcons';
+import { SPARK_MODELS, getModelByDomain, formatContextLength } from '../data/sparkModels';
+import type { SparkModelInfo } from '../data/sparkModels';
 import { api } from '../api';
 
 interface AccountStats {
@@ -107,7 +109,7 @@ const AccountDetail: React.FC = () => {
 
   const [info, setInfo] = useState<AccountInfo | null>(null);
   const [stats, setStats] = useState<AccountStats | null>(null);
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState<{ modelCode: string; modelName: string; modelId: string; checked: boolean; tokenExhausted: boolean }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
@@ -214,7 +216,10 @@ const AccountDetail: React.FC = () => {
               onChange={handleModelChange}
               options={[
                 { value: '', label: '自动（服务器默认）' },
-                ...models.map(m => ({ value: m, label: m })),
+                ...models.map(m => {
+                  const meta = getModelByDomain(m.modelCode);
+                  return { value: m.modelCode, label: m.modelName || meta?.name || m.modelCode };
+                }),
               ]}
             />
           </Card>
@@ -290,6 +295,69 @@ const AccountDetail: React.FC = () => {
           />
         </Card>
       )}
+
+      <Card title="可用模型" style={{ marginTop: 16 }}>
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          以下为 iFlyCode/SparkDesk 支持的模型列表。已授权模型可设置为默认模型。
+        </Typography.Paragraph>
+        <Table
+          dataSource={SPARK_MODELS.map(m => {
+            const authorized = models.find(am => am.modelCode === m.domain);
+            return {
+              ...m,
+              authorized: !!authorized,
+              tokenExhausted: authorized?.tokenExhausted || false,
+              key: m.domain,
+            };
+          }) as any}
+          columns={[
+            {
+              title: '模型',
+              key: 'name',
+              render: (_: unknown, record: any) => (
+                <Space direction="vertical" size={0}>
+                  <Typography.Text strong>{record.name}</Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>domain: {record.domain}</Typography.Text>
+                </Space>
+              ),
+            },
+            {
+              title: '参数量',
+              dataIndex: 'params',
+              key: 'params',
+              width: 100,
+            },
+            {
+              title: '上下文',
+              key: 'context',
+              width: 80,
+              render: (_: unknown, record: any) => formatContextLength(record.contextLength),
+            },
+            {
+              title: '能力',
+              key: 'capabilities',
+              render: (_: unknown, record: any) => (
+                <Space size={[4, 4]} wrap>
+                  {record.capabilities.map((c: string) => <Tag key={c} color="blue">{c}</Tag>)}
+                </Space>
+              ),
+            },
+            {
+              title: '状态',
+              key: 'status',
+              width: 100,
+              render: (_: unknown, record: any) => {
+                if (record.status === 'deprecated') return <Tag color="orange">即将下线</Tag>;
+                if (record.authorized && record.tokenExhausted) return <Tag color="red">次数已用尽</Tag>;
+                if (record.authorized) return <Tag color="green">已授权</Tag>;
+                return <Tag>未授权</Tag>;
+              },
+            },
+          ]}
+          pagination={false}
+          size="small"
+        />
+      </Card>
     </div>
   );
 };

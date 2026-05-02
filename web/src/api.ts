@@ -63,7 +63,7 @@ export const api = {
   getAccountStats: (apiKey: string) =>
     request<AccountStats>(`/api/accounts/${encodeURIComponent(apiKey)}/stats`),
   getAccountModels: (apiKey: string) =>
-    request<{ models: string[] }>(`/api/accounts/${encodeURIComponent(apiKey)}/models`).then(r => r.models || []),
+    request<{ models: { modelCode: string; modelName: string; modelId: string; checked: boolean; tokenExhausted: boolean }[] }>(`/api/accounts/${encodeURIComponent(apiKey)}/models`).then(r => r.models || []),
   updateAccountModel: (apiKey: string, model: string) =>
     request<{ ok: boolean }>(`/api/accounts/${encodeURIComponent(apiKey)}/model`, { method: 'PUT', body: JSON.stringify({ default_model: model }) }),
 

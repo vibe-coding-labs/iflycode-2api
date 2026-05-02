@@ -320,7 +320,7 @@ class Database:
             "completion_tokens": token_row["ct"],
         }
 
-    def get_account_models(self, api_key: str) -> List[str]:
+    def get_account_models(self, api_key: str) -> List[Dict]:
         acc = self.get_account(api_key)
         if not acc:
             return []
@@ -329,7 +329,18 @@ class Database:
             client = Client(acc["token"], acc.get("user_id", ""))
             models_data = client.list_models()
             client.close()
-            return [m.get("modelCode", m.get("name", "")) for m in models_data if m.get("modelCode") or m.get("name")]
+            result = []
+            for m in models_data:
+                if not isinstance(m, dict):
+                    continue
+                result.append({
+                    "modelCode": m.get("modelCode", m.get("name", "")),
+                    "modelName": m.get("modelName", m.get("name", "")),
+                    "modelId": m.get("modelId", ""),
+                    "checked": m.get("checked", False),
+                    "tokenExhausted": m.get("tokenExhausted", False),
+                })
+            return result
         except Exception:
             return []
 

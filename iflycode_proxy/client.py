@@ -122,7 +122,16 @@ class Client:
                 json={"token": self.token},
             )
             data = resp.json()
-            return data.get("obj") or data.get("data") or []
+            raw = data.get("obj") or data.get("data") or []
+            models = []
+            for item in raw:
+                if isinstance(item, dict):
+                    code_list = item.get("codeModelList")
+                    if isinstance(code_list, list):
+                        models.extend(code_list)
+                    elif item.get("modelCode"):
+                        models.append(item)
+            return models
         except Exception as e:
             log.warning("Failed to fetch models: %s", e)
             return []

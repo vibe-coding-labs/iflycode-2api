@@ -94,9 +94,10 @@ const Chat: React.FC = () => {
   useEffect(() => {
     if (!selectedAccount) { setModels([]); return; }
     api.getAccountModels(selectedAccount).then(m => {
-      setModels(m);
-      if (m.length > 0 && !m.includes(selectedModel)) {
-        setSelectedModel(m[0]);
+      const codes = m.map((item: { modelCode: string }) => item.modelCode);
+      setModels(codes);
+      if (codes.length > 0 && !codes.includes(selectedModel)) {
+        setSelectedModel(codes[0]);
       }
     }).catch(() => setModels([]));
   }, [selectedAccount]);
