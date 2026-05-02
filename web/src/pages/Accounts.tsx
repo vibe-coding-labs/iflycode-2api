@@ -7,8 +7,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   PlusOutlined, DeleteOutlined, StarOutlined,
   SafetyCertificateOutlined, ReloadOutlined, LoginOutlined,
-  CheckCircleOutlined, LoadingOutlined, CodeOutlined, RobotOutlined, CopyOutlined,
+  CheckCircleOutlined, LoadingOutlined, CopyOutlined,
 } from '@ant-design/icons';
+import { AnthropicIcon, OpenAIIcon } from '../components/BrandIcons';
 import { api } from '../api';
 import type { Account } from '../api';
 
@@ -267,14 +268,14 @@ const Accounts: React.FC = () => {
               trigger="hover"
               content={<CommandPreview label="Claude Code 启动命令" cmd={claudeCmd} onCopy={() => { navigator.clipboard.writeText(claudeCmd); message.success('已复制 Claude Code 启动命令'); }} />}
             >
-              <Button size="small" icon={<RobotOutlined />} />
+              <Button size="small" icon={<AnthropicIcon />} onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(claudeCmd); message.success('已复制 Claude Code 启动命令'); }} />
             </Popover>
             <Popover
               placement="leftTop"
               trigger="hover"
               content={<CommandPreview label="Codex 启动命令" cmd={codexCmd} onCopy={() => { navigator.clipboard.writeText(codexCmd); message.success('已复制 Codex 启动命令'); }} />}
             >
-              <Button size="small" icon={<CodeOutlined />} />
+              <Button size="small" icon={<OpenAIIcon />} onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(codexCmd); message.success('已复制 Codex 启动命令'); }} />
             </Popover>
           </Space>
         );
@@ -307,6 +308,10 @@ const Accounts: React.FC = () => {
         loading={loading}
         pagination={false}
         locale={{ emptyText: '暂无账号，请点击「添加账号」' }}
+        onRow={(record) => ({
+          onClick: () => navigate(`/accounts/${encodeURIComponent(record.api_key)}`),
+          style: { cursor: 'pointer' },
+        })}
       />
 
       <Modal
