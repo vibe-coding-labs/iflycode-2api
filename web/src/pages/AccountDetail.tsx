@@ -2,37 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Col, Row, Statistic, Typography, Spin, Select, Button,
-  Space, Tag, Table, message, Popover, Divider, Tooltip as AntTooltip,
+  Space, Tag, Table, message, Divider, Tooltip as AntTooltip, Popconfirm,
 } from 'antd';
 import {
   ArrowLeftOutlined, ApiOutlined, ThunderboltOutlined,
   CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined,
-  CopyOutlined, QuestionCircleOutlined,
+  CopyOutlined, QuestionCircleOutlined, SyncOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { AnthropicIcon, OpenAIIcon } from '../components/BrandIcons';
-import { SPARK_MODELS, getModelByDomain, formatContextLength, TIER_EXPLANATION } from '../data/sparkModels';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, Legend,
+} from 'recharts';
+import { SPARK_MODELS, formatContextLength, TIER_EXPLANATION } from '../data/sparkModels';
 import { api } from '../api';
-
-interface AccountStats {
-  api_key: string;
-  total_requests: number;
-  by_model: { model: string; count: number }[];
-  by_endpoint: { endpoint: string; count: number }[];
-  avg_latency_ms: number;
-  stream_count: number;
-  error_count: number;
-  prompt_tokens: number;
-  completion_tokens: number;
-}
-
-interface AccountInfo {
-  api_key: string;
-  user_id: string;
-  is_default: boolean;
-  default_model: string;
-  created_at?: string;
-}
+import type { Account, AccountStats, HourlyStatsPoint, RecentLogEntry } from '../api';
 
 const highlightBash = (cmd: string) => {
   const tokens: { text: string; color: string }[] = [];
@@ -101,22 +85,32 @@ const CommandPreview: React.FC<{ label: string; cmd: string; onCopy: () => void 
   );
 };
 
-const AccountDetail: React.FC = () => {
-  const { apiKey } = useParams<{ apiKey: string }>();
-  const navigate = useNavigate();
-  const decodedKey = decodeURIComponent(apiKey || '');
+const maskKey = (key: string) => key.length > 12 ? key.slice(0, 6) + '...' + key.slice(-4) : key;
 
-  const [info, setInfo] = useState<AccountInfo | null>(null);
+const formatHour = (h: string) => {
+  const parts = h.split(' ');
+  return parts.length >= 2 ? parts[1] : h;
+};
+
+const AccountDetail: React.FC = () => {
+  const { accountId } = useParams<{ accountId: string }>();
+  const navigate = useNavigate();
+  const decodedId = decodeURIComponent(accountId || '');
+
+  const [info, setInfo] = useState<Account | null>(null);
   const [stats, setStats] = useState<AccountStats | null>(null);
+  const [hourlyData, setHourlyData] = useState<HourlyStatsPoint[]>([]);
+  const [recentLogs, setRecentLogs] = useState<RecentLogEntry[]>([]);
   const [models, setModels] = useState<{ modelCode: string; modelName: string; modelId: string; checked: boolean; tokenExhausted: boolean }[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
+  const [hourRange, setHourRange] = useState<number>(24);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const accounts = await api.listAccounts();
-      const acc = accounts.find(a => a.api_key === decodedKey);
+      const acc = accounts.find(a => a.account_id === decodedId);
       if (acc) {
         setInfo(acc);
         setSelectedModel(acc.default_model);
@@ -124,23 +118,40 @@ const AccountDetail: React.FC = () => {
     } catch { /* ignore */ }
 
     try {
-      const s = await api.getAccountStats(decodedKey);
+      const s = await api.getAccountStats(decodedId);
       setStats(s);
     } catch { /* ignore */ }
 
     try {
-      const m = await api.getAccountModels(decodedKey);
+      const h = await api.getAccountHourlyStats(decodedId, hourRange);
+      setHourlyData(h.data || []);
+    } catch { /* ignore */ }
+
+    try {
+      const logs = await api.getAccountRecentLogs(decodedId, 20);
+      setRecentLogs(logs);
+    } catch { /* ignore */ }
+
+    try {
+      const m = await api.getAccountModels(decodedId);
       setModels(m);
     } catch { /* ignore */ }
 
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [decodedKey]);
+  useEffect(() => { fetchData(); }, [decodedId]);
+
+  useEffect(() => {
+    if (!decodedId) return;
+    api.getAccountHourlyStats(decodedId, hourRange)
+      .then(h => setHourlyData(h.data || []))
+      .catch(() => {});
+  }, [hourRange]);
 
   const handleModelChange = async (model: string) => {
     try {
-      await api.updateAccountModel(decodedKey, model);
+      await api.updateAccountModel(decodedId, model);
       setSelectedModel(model);
       message.success('默认模型已更新');
     } catch (e: unknown) {
@@ -148,15 +159,26 @@ const AccountDetail: React.FC = () => {
     }
   };
 
+  const handleRenewKey = async () => {
+    try {
+      const result = await api.renewApiKey(decodedId);
+      message.success('API Key 已轮换');
+      fetchData();
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : '轮换失败');
+    }
+  };
+
   if (loading) return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
   if (!info) return <Typography.Text type="danger">账号不存在</Typography.Text>;
 
-  const successRate = stats && stats.total_requests > 0
+  const totalSuccessRate = stats && stats.total_requests > 0
     ? ((stats.total_requests - stats.error_count) / stats.total_requests * 100).toFixed(1)
     : '0.0';
 
-  const claudeCmd = `API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nANTHROPIC_BASE_URL=http://localhost:40419 \\\nANTHROPIC_AUTH_TOKEN="${decodedKey}" \\\nclaude --dangerously-skip-permissions`;
-  const codexCmd = `OPENAI_API_KEY="${decodedKey}" \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\ncodex`;
+  const apiKey = info.api_key;
+  const claudeCmd = `API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nANTHROPIC_BASE_URL=http://localhost:40419 \\\nANTHROPIC_AUTH_TOKEN="${apiKey}" \\\nclaude --dangerously-skip-permissions`;
+  const codexCmd = `OPENAI_API_KEY="${apiKey}" \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\ncodex`;
 
   return (
     <div>
@@ -164,40 +186,104 @@ const AccountDetail: React.FC = () => {
       <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Space>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/accounts')}>返回</Button>
-          <Typography.Title level={4} style={{ margin: 0 }}>{decodedKey}</Typography.Title>
+          <Typography.Title level={4} style={{ margin: 0 }}>{info.account_id}</Typography.Title>
           {info.is_default && <Tag color="blue">默认账号</Tag>}
         </Space>
         <Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
       </div>
 
-      {/* 1. Overview — all stats in one card */}
-      <Card title="使用概览" style={{ marginBottom: 16 }}>
+      {/* 1. Request Statistics */}
+      <Card title="请求统计" style={{ marginBottom: 16 }}>
         <Row gutter={[16, 12]}>
           <Col xs={12} sm={8} md={4}>
             <Statistic title="总请求" value={stats?.total_requests || 0} prefix={<ApiOutlined />} />
           </Col>
           <Col xs={12} sm={8} md={4}>
-            <Statistic title="成功率" value={successRate} suffix="%" prefix={<CheckCircleOutlined />} valueStyle={{ color: '#52c41a' }} />
+            <Statistic title="今日请求" value={stats?.today_requests || 0} prefix={<ClockCircleOutlined />} valueStyle={{ color: '#1677ff' }} />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic title="总成功率" value={totalSuccessRate} suffix="%" prefix={<CheckCircleOutlined />} valueStyle={{ color: '#52c41a' }} />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic title="今日成功率" value={stats?.today_success_rate || 0} suffix="%" valueStyle={{ color: '#52c41a' }} />
+          </Col>
+          <Col xs={12} sm={8} md={4}>
+            <Statistic title="总错误" value={stats?.error_count || 0} prefix={<CloseCircleOutlined />} valueStyle={{ color: stats?.error_count ? '#ff4d4f' : undefined }} />
           </Col>
           <Col xs={12} sm={8} md={4}>
             <Statistic title="平均延迟" value={stats?.avg_latency_ms || 0} suffix="ms" prefix={<ThunderboltOutlined />} />
           </Col>
-          <Col xs={12} sm={8} md={4}>
-            <Statistic title="错误" value={stats?.error_count || 0} prefix={<CloseCircleOutlined />} valueStyle={{ color: stats?.error_count ? '#ff4d4f' : undefined }} />
-          </Col>
-          <Col xs={12} sm={8} md={4}>
-            <Statistic title="Prompt Tokens" value={stats?.prompt_tokens || 0} valueStyle={{ color: '#1677ff', fontSize: 16 }} />
-          </Col>
-          <Col xs={12} sm={8} md={4}>
-            <Statistic title="Completion Tokens" value={stats?.completion_tokens || 0} valueStyle={{ color: '#722ed1', fontSize: 16 }} />
-          </Col>
         </Row>
+        {hourlyData.length > 0 && (
+          <>
+            <Divider style={{ margin: '16px 0 12px' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>每小时请求量</Typography.Text>
+              <Select
+                size="small"
+                value={hourRange}
+                onChange={setHourRange}
+                style={{ width: 120 }}
+                options={[
+                  { value: 24, label: '最近 24 小时' },
+                  { value: 48, label: '最近 48 小时' },
+                  { value: 168, label: '最近 7 天' },
+                ]}
+              />
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={hourlyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="hour" tickFormatter={formatHour} tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip labelFormatter={(l) => String(l)} />
+                <Legend />
+                <Line type="monotone" dataKey="request_count" name="请求数" stroke="#1677ff" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="error_count" name="错误数" stroke="#ff4d4f" strokeWidth={1.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </>
+        )}
       </Card>
 
-      {/* 2. Model & Account — default model + account info + model catalog in ONE card */}
+      {/* 2. Token Consumption */}
+      <Card title="Token 消耗" style={{ marginBottom: 16 }}>
+        <Row gutter={[16, 12]}>
+          <Col xs={12} sm={8} md={6}>
+            <Statistic title="总 Prompt Tokens" value={stats?.prompt_tokens || 0} valueStyle={{ color: '#1677ff', fontSize: 18 }} />
+          </Col>
+          <Col xs={12} sm={8} md={6}>
+            <Statistic title="总 Completion Tokens" value={stats?.completion_tokens || 0} valueStyle={{ color: '#722ed1', fontSize: 18 }} />
+          </Col>
+          <Col xs={12} sm={8} md={6}>
+            <Statistic title="24h Prompt" value={stats?.prompt_tokens_24h || 0} valueStyle={{ color: '#1677ff' }} />
+          </Col>
+          <Col xs={12} sm={8} md={6}>
+            <Statistic title="24h Completion" value={stats?.completion_tokens_24h || 0} valueStyle={{ color: '#722ed1' }} />
+          </Col>
+        </Row>
+        {hourlyData.some(h => h.prompt_tokens > 0 || h.completion_tokens > 0) && (
+          <>
+            <Divider style={{ margin: '16px 0 12px' }} />
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>每小时 Token 消耗</Typography.Text>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={hourlyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="hour" tickFormatter={formatHour} tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip labelFormatter={(l) => String(l)} />
+                <Legend />
+                <Line type="monotone" dataKey="prompt_tokens" name="Prompt Tokens" stroke="#1677ff" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="completion_tokens" name="Completion Tokens" stroke="#722ed1" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </>
+        )}
+      </Card>
+
+      {/* 3. Model & Account */}
       <Card title="模型与账号" style={{ marginBottom: 16 }}>
         <Row gutter={[24, 16]}>
-          {/* Left: default model + account info */}
           <Col xs={24} md={8}>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>默认模型</Typography.Text>
             <Select
@@ -225,10 +311,20 @@ const AccountDetail: React.FC = () => {
               <Typography.Text>{info.created_at || '未知'}</Typography.Text>
               <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 8 }}>流式请求数</Typography.Text>
               <Typography.Text>{stats?.stream_count || 0}</Typography.Text>
+
+              <Divider style={{ margin: '12px 0 8px' }} />
+
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>API Key（代理认证）</Typography.Text>
+              <Space size={4}>
+                <Typography.Text code>{maskKey(apiKey)}</Typography.Text>
+                <Button size="small" type="link" icon={<CopyOutlined />} style={{ padding: 0, height: 'auto', minWidth: 0 }} onClick={() => { navigator.clipboard.writeText(apiKey); message.success('已复制 API Key'); }} />
+              </Space>
+              <Popconfirm title="轮换后旧 API Key 将立即失效，确定继续？" onConfirm={handleRenewKey}>
+                <Button size="small" icon={<SyncOutlined />} style={{ marginTop: 4 }}>轮换 API Key</Button>
+              </Popconfirm>
             </Space>
           </Col>
 
-          {/* Right: model catalog table */}
           <Col xs={24} md={16}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>可用模型</Typography.Text>
@@ -293,7 +389,7 @@ const AccountDetail: React.FC = () => {
         </Row>
       </Card>
 
-      {/* 3. Startup Commands */}
+      {/* 4. Startup Commands */}
       <Card title="启动命令" style={{ marginBottom: 16 }}>
         <Row gutter={[16, 16]}>
           <Col xs={24}>
@@ -305,7 +401,61 @@ const AccountDetail: React.FC = () => {
         </Row>
       </Card>
 
-      {/* 4. Analytics — chart + endpoint table in one card */}
+      {/* 5. Recent Request Logs */}
+      {recentLogs.length > 0 && (
+        <Card title="最近请求日志" style={{ marginBottom: 16 }}>
+          <Table
+            dataSource={recentLogs}
+            rowKey="id"
+            size="small"
+            pagination={false}
+            scroll={{ x: 700 }}
+            columns={[
+              {
+                title: '时间',
+                dataIndex: 'created_at',
+                key: 'created_at',
+                width: 160,
+                render: (v: string) => v ? v.replace('T', ' ').slice(0, 19) : '',
+              },
+              { title: '模型', dataIndex: 'model', key: 'model', width: 120, ellipsis: true },
+              { title: '端点', dataIndex: 'endpoint', key: 'endpoint', width: 140, ellipsis: true },
+              {
+                title: '状态',
+                dataIndex: 'status_code',
+                key: 'status_code',
+                width: 70,
+                render: (v: number) => <Tag color={v < 400 ? 'green' : 'red'}>{v}</Tag>,
+              },
+              {
+                title: '延迟',
+                dataIndex: 'latency_ms',
+                key: 'latency_ms',
+                width: 80,
+                render: (v: number) => `${v}ms`,
+              },
+              {
+                title: '流式',
+                dataIndex: 'stream',
+                key: 'stream',
+                width: 50,
+                render: (v: number) => v ? '是' : '否',
+              },
+              {
+                title: 'Tokens',
+                key: 'tokens',
+                width: 100,
+                render: (_: unknown, r: RecentLogEntry) => {
+                  const total = (r.prompt_tokens || 0) + (r.completion_tokens || 0);
+                  return total > 0 ? total.toLocaleString() : '-';
+                },
+              },
+            ]}
+          />
+        </Card>
+      )}
+
+      {/* 6. Analytics */}
       {(stats && (stats.by_model.length > 0 || stats.by_endpoint.length > 0)) && (
         <Card title="使用分析" style={{ marginBottom: 16 }}>
           <Row gutter={[24, 16]}>
