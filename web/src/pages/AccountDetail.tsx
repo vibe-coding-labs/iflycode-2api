@@ -208,9 +208,10 @@ const AccountDetail: React.FC = () => {
               onChange={handleModelChange}
               options={[
                 { value: '', label: '自动（服务器默认）' },
-                ...models.map(m => {
-                  const meta = getModelByDomain(m.modelCode);
-                  return { value: m.modelCode, label: m.modelName || meta?.name || m.modelCode };
+                ...SPARK_MODELS.map(m => {
+                  const authorized = models.find(am => am.modelCode === m.domain);
+                  const suffix = authorized ? '' : '（未授权）';
+                  return { value: m.domain, label: `${m.name}${suffix}` };
                 }),
               ]}
             />
