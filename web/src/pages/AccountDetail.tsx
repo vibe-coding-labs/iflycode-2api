@@ -83,7 +83,7 @@ const highlightBash = (cmd: string) => {
 const CommandPreview: React.FC<{ label: string; cmd: string; onCopy: () => void }> = ({ label, cmd, onCopy }) => {
   const tokens = React.useMemo(() => highlightBash(cmd), [cmd]);
   return (
-    <div style={{ maxWidth: 480 }}>
+    <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
         <Typography.Text strong style={{ fontSize: 12 }}>{label}</Typography.Text>
         <Button size="small" type="link" icon={<CopyOutlined />} onClick={onCopy} style={{ padding: 0, height: 'auto', fontSize: 12 }}>
@@ -295,35 +295,14 @@ const AccountDetail: React.FC = () => {
 
       {/* 3. Startup Commands */}
       <Card title="启动命令" style={{ marginBottom: 16 }}>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          点击按钮复制启动命令，环境变量会自动将请求路由到此账号。
-        </Typography.Paragraph>
-        <Space size="middle">
-          <Popover
-            placement="bottomLeft"
-            trigger="hover"
-            content={<CommandPreview label="Claude Code 启动命令" cmd={claudeCmd} onCopy={() => { navigator.clipboard.writeText(claudeCmd); message.success('已复制 Claude Code 启动命令'); }} />}
-          >
-            <Button
-              icon={<AnthropicIcon size={14} />}
-              onClick={() => { navigator.clipboard.writeText(claudeCmd); message.success('已复制 Claude Code 启动命令'); }}
-            >
-              Claude Code
-            </Button>
-          </Popover>
-          <Popover
-            placement="bottomLeft"
-            trigger="hover"
-            content={<CommandPreview label="Codex 启动命令" cmd={codexCmd} onCopy={() => { navigator.clipboard.writeText(codexCmd); message.success('已复制 Codex 启动命令'); }} />}
-          >
-            <Button
-              icon={<OpenAIIcon size={14} />}
-              onClick={() => { navigator.clipboard.writeText(codexCmd); message.success('已复制 Codex 启动命令'); }}
-            >
-              Codex
-            </Button>
-          </Popover>
-        </Space>
+        <Row gutter={[16, 16]}>
+          <Col xs={24}>
+            <CommandPreview label="Claude Code" cmd={claudeCmd} onCopy={() => { navigator.clipboard.writeText(claudeCmd); message.success('已复制 Claude Code 启动命令'); }} />
+          </Col>
+          <Col xs={24}>
+            <CommandPreview label="Codex" cmd={codexCmd} onCopy={() => { navigator.clipboard.writeText(codexCmd); message.success('已复制 Codex 启动命令'); }} />
+          </Col>
+        </Row>
       </Card>
 
       {/* 4. Analytics — chart + endpoint table in one card */}
