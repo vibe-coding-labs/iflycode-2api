@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS request_logs (
     stream INTEGER,
     status_code INTEGER,
     latency_ms INTEGER,
+    prompt_tokens INTEGER DEFAULT 0,
+    completion_tokens INTEGER DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
@@ -54,7 +56,20 @@ class Database:
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
             self._conn.executescript(SCHEMA)
+            self._migrate()
         return self._conn
+
+    def _migrate(self):
+        """Add columns that may not exist in older databases."""
+        conn = self._conn
+        try:
+            conn.execute("ALTER TABLE request_logs ADD COLUMN prompt_tokens INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE request_logs ADD COLUMN completion_tokens INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
 
     def close(self):
         if self._conn:
@@ -191,12 +206,13 @@ class Database:
     # -- Request logs --
 
     def log_request(self, api_key: str, model: str, endpoint: str, stream: bool,
-                    status_code: int, latency_ms: int):
+                    status_code: int, latency_ms: int,
+                    prompt_tokens: int = 0, completion_tokens: int = 0):
         conn = self._get_conn()
         conn.execute(
-            "INSERT INTO request_logs (api_key, model, endpoint, stream, status_code, latency_ms) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (api_key, model, endpoint, 1 if stream else 0, status_code, latency_ms),
+            "INSERT INTO request_logs (api_key, model, endpoint, stream, status_code, latency_ms, prompt_tokens, completion_tokens) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (api_key, model, endpoint, 1 if stream else 0, status_code, latency_ms, prompt_tokens, completion_tokens),
         )
         conn.commit()
 
@@ -249,12 +265,17 @@ class Database:
         avg_latency = conn.execute(
             "SELECT AVG(latency_ms) as avg FROM request_logs WHERE latency_ms > 0"
         ).fetchone()["avg"]
+        token_row = conn.execute(
+            "SELECT COALESCE(SUM(prompt_tokens),0) as pt, COALESCE(SUM(completion_tokens),0) as ct FROM request_logs"
+        ).fetchone()
         return {
             "total_requests": total,
             "by_model": [{"model": r["model"], "count": r["cnt"]} for r in by_model],
             "by_account": [{"api_key": r["api_key"], "count": r["cnt"]} for r in by_account],
             "avg_latency_ms": round(avg_latency or 0, 1),
             "accounts_count": conn.execute("SELECT COUNT(*) as cnt FROM accounts").fetchone()["cnt"],
+            "prompt_tokens": token_row["pt"],
+            "completion_tokens": token_row["ct"],
         }
 
     def get_account_stats(self, api_key: str) -> Dict[str, Any]:
@@ -282,6 +303,11 @@ class Database:
             "SELECT COUNT(*) as cnt FROM request_logs WHERE api_key = ? AND status_code >= 400",
             (api_key,),
         ).fetchone()["cnt"]
+        token_row = conn.execute(
+            "SELECT COALESCE(SUM(prompt_tokens),0) as pt, COALESCE(SUM(completion_tokens),0) as ct "
+            "FROM request_logs WHERE api_key = ?",
+            (api_key,),
+        ).fetchone()
         return {
             "api_key": api_key,
             "total_requests": total,
@@ -290,6 +316,8 @@ class Database:
             "avg_latency_ms": round(avg_latency or 0, 1),
             "stream_count": stream_count,
             "error_count": error_count,
+            "prompt_tokens": token_row["pt"],
+            "completion_tokens": token_row["ct"],
         }
 
     def get_account_models(self, api_key: str) -> List[str]:

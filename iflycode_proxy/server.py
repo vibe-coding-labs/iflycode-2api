@@ -67,10 +67,14 @@ def create_app(router: CredentialRouter, db=None):
                             model = body.get("model", "")
                     except Exception:
                         pass
+                prompt_tokens = 0
+                completion_tokens = 0
                 db.log_request(
                     api_key=api_key, model=model, endpoint=path,
                     stream=False, status_code=response.status_code,
                     latency_ms=latency,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
                 )
             return response
 
