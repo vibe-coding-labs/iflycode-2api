@@ -22,6 +22,8 @@ export interface AccountStats {
   avg_latency_ms: number;
   stream_count: number;
   error_count: number;
+  prompt_tokens: number;
+  completion_tokens: number;
 }
 
 export interface LogEntry {
