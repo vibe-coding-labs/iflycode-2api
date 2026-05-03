@@ -10,6 +10,23 @@ export interface SparkModelInfo {
   deprecatedDate?: string;
   tier: 'free' | 'paid' | 'premium';
   tierLabel: string;
+  supportsToolUse: boolean;
+  supportsCoding: boolean;
+  permissionCode?: string;
+}
+
+/** Determine model type from upstream permissionCode. */
+export function getModelTypeFromPermission(permissionCode: string): 'chat' | 'coding' {
+  if (permissionCode === 'INLINE_CHAT') return 'coding';
+  return 'chat';
+}
+
+/** Determine model type label for display. */
+export function getModelTypeLabel(model: SparkModelInfo): string {
+  if (model.permissionCode) {
+    return getModelTypeFromPermission(model.permissionCode) === 'coding' ? 'Coding' : 'Chat';
+  }
+  return model.supportsCoding ? 'Coding' : 'Chat';
 }
 
 export const SPARK_MODELS: SparkModelInfo[] = [
@@ -24,6 +41,8 @@ export const SPARK_MODELS: SparkModelInfo[] = [
     status: 'available',
     tier: 'premium',
     tierLabel: '旗舰版',
+    supportsToolUse: true,
+    supportsCoding: true,
   },
   {
     domain: 'max-32k',
@@ -37,6 +56,8 @@ export const SPARK_MODELS: SparkModelInfo[] = [
     deprecatedDate: '2026-03-10',
     tier: 'paid',
     tierLabel: '专业版',
+    supportsToolUse: true,
+    supportsCoding: true,
   },
   {
     domain: 'generalv3.5',
@@ -50,6 +71,8 @@ export const SPARK_MODELS: SparkModelInfo[] = [
     deprecatedDate: '2026-03-10',
     tier: 'paid',
     tierLabel: '专业版',
+    supportsToolUse: true,
+    supportsCoding: true,
   },
   {
     domain: 'pro-128k',
@@ -62,6 +85,8 @@ export const SPARK_MODELS: SparkModelInfo[] = [
     status: 'available',
     tier: 'paid',
     tierLabel: '专业版',
+    supportsToolUse: true,
+    supportsCoding: true,
   },
   {
     domain: 'generalv3',
@@ -74,6 +99,8 @@ export const SPARK_MODELS: SparkModelInfo[] = [
     status: 'available',
     tier: 'paid',
     tierLabel: '专业版',
+    supportsToolUse: true,
+    supportsCoding: false,
   },
   {
     domain: 'lite',
@@ -86,6 +113,8 @@ export const SPARK_MODELS: SparkModelInfo[] = [
     status: 'available',
     tier: 'free',
     tierLabel: '免费',
+    supportsToolUse: false,
+    supportsCoding: false,
   },
   {
     domain: 'kjwx',
@@ -98,6 +127,8 @@ export const SPARK_MODELS: SparkModelInfo[] = [
     status: 'available',
     tier: 'paid',
     tierLabel: '专业版',
+    supportsToolUse: false,
+    supportsCoding: false,
   },
 ];
 

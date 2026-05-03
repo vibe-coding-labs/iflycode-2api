@@ -183,12 +183,24 @@ class Client:
             raw = data.get("obj") or data.get("data") or []
             models = []
             for item in raw:
-                if isinstance(item, dict):
-                    code_list = item.get("codeModelList")
-                    if isinstance(code_list, list):
-                        models.extend(code_list)
-                    elif item.get("modelCode"):
-                        models.append(item)
+                if not isinstance(item, dict):
+                    continue
+                permission_code = item.get("permissionCode", "")
+                permission_name = item.get("permissionName", "")
+                language = item.get("language", "")
+                code_list = item.get("codeModelList")
+                if isinstance(code_list, list):
+                    for m in code_list:
+                        if isinstance(m, dict):
+                            m["permissionCode"] = permission_code
+                            m["permissionName"] = permission_name
+                            m["language"] = language
+                            models.append(m)
+                elif item.get("modelCode"):
+                    item["permissionCode"] = permission_code
+                    item["permissionName"] = permission_name
+                    item["language"] = language
+                    models.append(item)
             return models
         except Exception as e:
             log.warning("Failed to fetch models: %s", e)
@@ -216,6 +228,7 @@ class _RetryableStream:
         self._url = url
         self._headers = headers
         self._body = body
+        self._ctx = None
         self._resp: Optional[httpx.Response] = None
         self._line_iter: Optional[Iterator[bytes]] = None
 
@@ -227,16 +240,18 @@ class _RetryableStream:
         self._close_resp()
 
     def _close_resp(self):
-        if self._resp is not None:
+        if self._ctx is not None:
             try:
-                self._resp.close()
+                self._ctx.__exit__(None, None, None)
             except Exception:
                 pass
+            self._ctx = None
             self._resp = None
             self._line_iter = None
 
     def _open_stream(self):
-        self._resp = self._http.stream("POST", self._url, headers=self._headers, json=self._body).__enter__()
+        self._ctx = self._http.stream("POST", self._url, headers=self._headers, json=self._body)
+        self._resp = self._ctx.__enter__()
         self._line_iter = self._resp.iter_lines()
 
     def iter_lines(self):

@@ -11,7 +11,7 @@ from iflycode_proxy.db import Database, _generate_account_id, _generate_api_key
 log = logging.getLogger("iflycode-proxy.web-api")
 
 
-def create_web_api_router(db: Database) -> APIRouter:
+def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
     router = APIRouter(prefix="/api")
 
     # -- Accounts --
@@ -61,6 +61,8 @@ def create_web_api_router(db: Database) -> APIRouter:
         body = await request.json()
         default_model = body.get("default_model", "").strip()
         db.update_account_model(account_id, default_model)
+        if cred_router:
+            cred_router.set_default_model(account_id, default_model)
         return {"ok": True, "account_id": account_id, "default_model": default_model}
 
     @router.get("/accounts/{account_id:path}/stats")

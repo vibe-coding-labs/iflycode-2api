@@ -13,6 +13,30 @@ export interface Stats {
   avg_latency_ms: number;
   by_model: { model: string; count: number }[];
   by_account: { api_key: string; count: number }[];
+  prompt_tokens: number;
+  completion_tokens: number;
+  all_time: {
+    total_requests: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    error_count: number;
+  };
+  today_requests: number;
+  today_success_count: number;
+  today_error_count: number;
+  today_stream_count: number;
+  today_avg_latency_ms: number;
+  today_prompt_tokens: number;
+  today_completion_tokens: number;
+  today_by_model: { model: string; count: number }[];
+  today_by_account: { api_key: string; count: number }[];
+  hourly: {
+    hour: string;
+    count: number;
+    input_tokens: number;
+    output_tokens: number;
+    errors: number;
+  }[];
 }
 
 export interface AccountStats {
@@ -99,7 +123,7 @@ export const api = {
   getAccountStats: (accountId: string) =>
     request<AccountStats>(`/api/accounts/${enc(accountId)}/stats`),
   getAccountModels: (accountId: string) =>
-    request<{ models: { modelCode: string; modelName: string; modelId: string; checked: boolean; tokenExhausted: boolean }[] }>(`/api/accounts/${enc(accountId)}/models`).then(r => r.models || []),
+    request<{ models: { modelCode: string; modelName: string; modelId: string; checked: boolean; tokenExhausted: boolean; permissionCode: string; permissionName: string; language: string }[] }>(`/api/accounts/${enc(accountId)}/models`).then(r => r.models || []),
   updateAccountModel: (accountId: string, model: string) =>
     request<{ ok: boolean }>(`/api/accounts/${enc(accountId)}/model`, { method: 'PUT', body: JSON.stringify({ default_model: model }) }),
   renewApiKey: (accountId: string) =>

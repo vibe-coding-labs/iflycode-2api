@@ -14,13 +14,23 @@ const Logs = lazy(() => import('./pages/Logs'));
 const pageLoading = <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
 
 const App: React.FC = () => (
-  <ConfigProvider locale={zhCN} theme={{ token: { colorPrimary: '#1677ff' } }}>
+  <ConfigProvider locale={zhCN} theme={{
+    token: {
+      colorPrimary: '#389e0d',
+      colorSuccess: '#52c41a',
+      colorInfo: '#389e0d',
+    },
+    components: {
+      Layout: { siderBg: '#ffffff' },
+      Menu: { itemSelectedBg: '#f6ffed', itemSelectedColor: '#389e0d' },
+    },
+  }}>
     <BrowserRouter>
       <Routes>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Suspense fallback={pageLoading}><Dashboard /></Suspense>} />
           <Route path="/accounts" element={<Suspense fallback={pageLoading}><Accounts /></Suspense>} />
-          <Route path="/accounts/:apiKey" element={<Suspense fallback={pageLoading}><AccountDetail /></Suspense>} />
+          <Route path="/accounts/:accountId" element={<Suspense fallback={pageLoading}><AccountDetail /></Suspense>} />
           <Route path="/chat" element={<Suspense fallback={pageLoading}><Chat /></Suspense>} />
           <Route path="/settings" element={<Suspense fallback={pageLoading}><Settings /></Suspense>} />
           <Route path="/logs" element={<Suspense fallback={pageLoading}><Logs /></Suspense>} />

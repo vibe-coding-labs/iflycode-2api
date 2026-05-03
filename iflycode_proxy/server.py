@@ -79,7 +79,7 @@ def create_app(router: CredentialRouter, db=None):
             return response
 
         from iflycode_proxy.web_api import create_web_api_router
-        app.include_router(create_web_api_router(db))
+        app.include_router(create_web_api_router(db, cred_router=router))
 
     app.include_router(create_openai_router(router))
     app.include_router(create_anthropic_router(router))

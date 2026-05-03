@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Table, Button, Space, Modal, Form, Input, Switch,
-  message, Popconfirm, Tag, Typography, Alert, Tabs, Spin, Tooltip, Popover,
+  message, Popconfirm, Tag, Typography, Alert, Tabs, Spin, Popover,
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -80,6 +80,8 @@ const CommandPreview: React.FC<{ label: string; cmd: string; onCopy: () => void 
   );
 };
 
+const maskKey = (key: string) => key.length > 12 ? key.slice(0, 6) + '...' + key.slice(-4) : key;
+
 const Accounts: React.FC = () => {
   const navigate = useNavigate();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -113,10 +115,10 @@ const Accounts: React.FC = () => {
     return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); };
   }, []);
 
-  const handleAdd = async (values: { api_key: string; token: string; user_id?: string; is_default?: boolean }) => {
+  const handleAdd = async (values: { spark_token: string; user_id?: string; is_default?: boolean }) => {
     try {
-      await api.addAccount(values);
-      message.success(`账号「${values.api_key}」添加成功`);
+      const result = await api.addAccount({ spark_token: values.spark_token, user_id: values.user_id, is_default: values.is_default });
+      message.success(`账号「${result.account_id}」添加成功`);
       setModalOpen(false);
       form.resetFields();
       fetchAccounts();
@@ -125,34 +127,34 @@ const Accounts: React.FC = () => {
     }
   };
 
-  const handleRemove = async (apiKey: string) => {
+  const handleRemove = async (accountId: string) => {
     try {
-      await api.removeAccount(apiKey);
-      message.success(`账号「${apiKey}」已删除`);
+      await api.removeAccount(accountId);
+      message.success(`账号已删除`);
       fetchAccounts();
     } catch (e: unknown) {
       message.error(e instanceof Error ? e.message : '删除账号失败');
     }
   };
 
-  const handleSetDefault = async (apiKey: string) => {
+  const handleSetDefault = async (accountId: string) => {
     try {
-      await api.setDefault(apiKey);
-      message.success(`已将「${apiKey}」设为默认账号`);
+      await api.setDefault(accountId);
+      message.success(`已设为默认账号`);
       fetchAccounts();
     } catch (e: unknown) {
       message.error(e instanceof Error ? e.message : '设置失败');
     }
   };
 
-  const handleValidate = async (apiKey: string) => {
-    setValidating(apiKey);
+  const handleValidate = async (accountId: string) => {
+    setValidating(accountId);
     try {
-      const result = await api.validateAccount(apiKey);
+      const result = await api.validateAccount(accountId);
       if (result.valid) {
-        message.success(`账号「${apiKey}」验证通过`);
+        message.success(`账号验证通过`);
       } else {
-        message.error(`账号「${apiKey}」验证失败，token 无效或已过期`);
+        message.error(`账号验证失败，token 无效或已过期`);
       }
     } catch (e: unknown) {
       message.error(e instanceof Error ? e.message : '验证请求失败');
@@ -193,7 +195,7 @@ const Accounts: React.FC = () => {
             token: result.token,
             user_id: result.user_id || '',
           });
-          message.success(`SSO 登录成功，已添加账号「${addResult.api_key}」`);
+          message.success(`SSO 登录成功，已添加账号`);
           setModalOpen(false);
           fetchAccounts();
         }
@@ -214,9 +216,9 @@ const Accounts: React.FC = () => {
 
   const columns = [
     {
-      title: '路由密钥 (API Key)',
-      dataIndex: 'api_key',
-      key: 'api_key',
+      title: '账号 ID',
+      dataIndex: 'account_id',
+      key: 'account_id',
       render: (text: string) => (
         <Typography.Text code style={{ cursor: 'pointer' }} onClick={() => navigate(`/accounts/${encodeURIComponent(text)}`)}>
           {text}
@@ -224,9 +226,26 @@ const Accounts: React.FC = () => {
       ),
     },
     {
+      title: 'API Key',
+      dataIndex: 'api_key',
+      key: 'api_key',
+      render: (text: string) => (
+        <Space size={4}>
+          <Typography.Text code>{maskKey(text)}</Typography.Text>
+          <Button size="small" type="link" icon={<CopyOutlined />} style={{ padding: 0, height: 'auto', minWidth: 0 }} onClick={() => { navigator.clipboard.writeText(text); message.success('已复制 API Key'); }} />
+        </Space>
+      ),
+    },
+    {
       title: '用户 ID',
       dataIndex: 'user_id',
       key: 'user_id',
+    },
+    {
+      title: '默认模型',
+      dataIndex: 'default_model',
+      key: 'default_model',
+      render: (val: string) => val ? <Tag color="green">{val}</Tag> : <Typography.Text type="secondary">自动</Typography.Text>,
     },
     {
       title: '状态',
@@ -240,14 +259,14 @@ const Accounts: React.FC = () => {
       render: (_: unknown, record: Account) => (
         <Space>
           {!record.is_default && (
-            <Button size="small" onClick={() => handleSetDefault(record.api_key)}>
+            <Button size="small" onClick={() => handleSetDefault(record.account_id)}>
               <StarOutlined /> 设为默认
             </Button>
           )}
-          <Button size="small" onClick={() => handleValidate(record.api_key)} loading={validating === record.api_key}>
+          <Button size="small" onClick={() => handleValidate(record.account_id)} loading={validating === record.account_id}>
             <SafetyCertificateOutlined /> 验证
           </Button>
-          <Popconfirm title={`确定删除账号「${record.api_key}」？`} onConfirm={() => handleRemove(record.api_key)}>
+          <Popconfirm title="确定删除此账号？" onConfirm={() => handleRemove(record.account_id)}>
             <Button size="small" danger><DeleteOutlined /> 删除</Button>
           </Popconfirm>
         </Space>
@@ -259,8 +278,9 @@ const Accounts: React.FC = () => {
       width: 120,
       align: 'center' as const,
       render: (_: unknown, record: Account) => {
-        const claudeCmd = `API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nANTHROPIC_BASE_URL=http://localhost:40419 \\\nANTHROPIC_AUTH_TOKEN="${record.api_key}" \\\nclaude --dangerously-skip-permissions`;
-        const codexCmd = `OPENAI_API_KEY="${record.api_key}" \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\ncodex`;
+        const modelFlag = record.default_model ? ` --model ${record.default_model}` : '';
+        const claudeCmd = `API_TIMEOUT_MS=6000000 \\\nCLAUDE_CODE_MAX_RETRIES=1000000 \\\nCLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 \\\nANTHROPIC_BASE_URL=http://localhost:40419 \\\nANTHROPIC_AUTH_TOKEN="${record.api_key}" \\\nclaude --dangerously-skip-permissions${modelFlag}`;
+        const codexCmd = `OPENAI_API_KEY="${record.api_key}" \\\nOPENAI_BASE_URL=http://localhost:40419/v1 \\\ncodex${modelFlag}`;
         return (
           <Space>
             <Popover
@@ -297,19 +317,19 @@ const Accounts: React.FC = () => {
         type="info"
         showIcon
         message="多账号路由说明"
-        description="每个账号对应一个 iFlyCode token。客户端通过 x-api-key 头路由到对应账号。配置 OpenAI SDK 时将路由密钥填入 api_key 即可。"
+        description="每个账号拥有独立的 API Key 用于代理认证。客户端通过 x-api-key 头路由到对应账号。API Key 可随时轮换，不影响账号数据。"
         style={{ marginBottom: 16 }}
       />
 
       <Table
         dataSource={accounts}
         columns={columns}
-        rowKey="api_key"
+        rowKey="account_id"
         loading={loading}
         pagination={false}
         locale={{ emptyText: '暂无账号，请点击「添加账号」' }}
         onRow={(record) => ({
-          onClick: () => navigate(`/accounts/${encodeURIComponent(record.api_key)}`),
+          onClick: () => navigate(`/accounts/${encodeURIComponent(record.account_id)}`),
           style: { cursor: 'pointer' },
         })}
       />
@@ -375,10 +395,7 @@ const Accounts: React.FC = () => {
               label: '手动粘贴 Token',
               children: (
                 <Form form={form} layout="vertical" onFinish={handleAdd} style={{ padding: '12px 0' }}>
-                  <Form.Item name="api_key" label="路由密钥" rules={[{ required: true, message: '请输入路由密钥' }]}>
-                    <Input placeholder="例如：account-1、user-zhangsan" />
-                  </Form.Item>
-                  <Form.Item name="token" label="iFlyCode Token" rules={[{ required: true, message: '请输入 token' }]}>
+                  <Form.Item name="spark_token" label="iFlyCode SSO Token" rules={[{ required: true, message: '请输入 token' }]}>
                     <Input.Password placeholder="从 iFlyCode 登录后获取的 token" />
                   </Form.Item>
                   <Form.Item name="user_id" label="用户 ID">

@@ -23,6 +23,23 @@ from iflycode_proxy.proxy_logger import log_request, log_response, log_error
 
 log = logging.getLogger("iflycode-proxy.openai")
 
+# Static model metadata — mirrors web/src/data/sparkModels.ts
+SPARK_MODEL_META = {
+    "4.0Ultra":    {"name": "星火 4.0 Ultra", "supports_coding": True,  "tier": "旗舰版", "context": "32K"},
+    "max-32k":     {"name": "星火 Max-32K",   "supports_coding": True,  "tier": "专业版", "context": "32K"},
+    "generalv3.5": {"name": "星火 Max",       "supports_coding": True,  "tier": "专业版", "context": "8K"},
+    "pro-128k":    {"name": "星火 Pro-128K",  "supports_coding": True,  "tier": "专业版", "context": "128K"},
+    "generalv3":   {"name": "星火 Pro",       "supports_coding": False, "tier": "专业版", "context": "8K"},
+    "lite":        {"name": "星火 Lite",      "supports_coding": False, "tier": "免费",   "context": "4K"},
+    "kjwx":        {"name": "科技文献大模型",  "supports_coding": False, "tier": "专业版", "context": "未知"},
+}
+
+# permissionCode -> model type mapping
+PERMISSION_TYPE_MAP = {
+    "TALK_INTELLIGENT": "chat",
+    "INLINE_CHAT": "coding",
+}
+
 DEFAULT_MODEL = "iflycode-default"
 PROTOCOL = "openai"
 
@@ -251,7 +268,30 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
             return _error_response("invalid JSON", 400)
 
         model = req_body.get("model", DEFAULT_MODEL)
+
+        # Strip -coding suffix and determine mode
+        is_coding_mode = model.endswith("-coding")
+        real_model = model.removesuffix("-coding") if is_coding_mode else model
+
         jc_body = translate_request(req_body)
+
+        model_code = cred_router.get_default_model(api_key or None)
+        # Strip -coding from default model too (stored with suffix for persistence)
+        if model_code and model_code.endswith("-coding"):
+            model_code = model_code.removesuffix("-coding")
+        # Use real model code (without -coding suffix) for upstream
+        effective_model_code = model_code or real_model
+        if effective_model_code and effective_model_code != DEFAULT_MODEL:
+            jc_body["modelCode"] = effective_model_code
+            jc_body["enableMultiModelSwitch"] = True
+
+        # Switch to INLINE_CHAT when -coding suffix or tools are present
+        has_tools = bool(req_body.get("tools"))
+        if is_coding_mode or has_tools:
+            jc_body["commandType"] = "TALK:ASK"
+            jc_body["taskName"] = "INLINE_CHAT"
+            jc_body["scene"] = "INLINE_CHAT"
+            log.info("Coding mode activated (suffix=%s, tools=%s) for model=%s", is_coding_mode, has_tools, real_model)
 
         log_request(
             protocol=PROTOCOL, endpoint="/v1/chat/completions",
@@ -267,13 +307,50 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
         return _stream_chat_non_streaming(client, jc_body, model, api_key)
 
     @router.get("/v1/models")
-    async def list_models() -> Any:
-        model_ids = ["iflycode-default", "gpt-4", "gpt-4o"]
-        models = [
-            Model(id=m, object="model", created=1700000000, owned_by="iflycode")
-            for m in model_ids
-        ]
-        return JSONResponse(content={"object": "list", "data": [m.model_dump(mode="json") for m in models]})
+    async def list_models(request: Request) -> Any:
+        api_key = request.headers.get("authorization", "").replace("Bearer ", "") if request.headers.get("authorization", "").startswith("Bearer ") else request.headers.get("x-api-key", "")
+        models = []
+
+        def _make_model(model_id: str, name: str, mode: str, tier: str, context: str) -> dict:
+            data = Model(id=model_id, object="model", created=1700000000, owned_by="iflycode").model_dump(mode="json")
+            data["name"] = name
+            data["mode"] = mode
+            data["capabilities"] = ["chat"] if mode == "chat" else ["chat", "coding"]
+            data["tier"] = tier
+            data["context"] = context
+            return data
+
+        # Default/auto models — always present at the top
+        models.append(_make_model("iflycode-default", "自动选择 (Chat)", "chat", "", ""))
+        models.append(_make_model("iflycode-default-coding", "自动选择 (Coding)", "coding", "", ""))
+
+        try:
+            client = cred_router.get_client(api_key or None)
+            upstream_models = client.list_models()
+            for m in upstream_models:
+                model_id = m.get("modelCode", "") or m.get("modelId", "")
+                if not model_id:
+                    continue
+                meta = SPARK_MODEL_META.get(model_id, {})
+                perm_code = m.get("permissionCode", "")
+                supports_coding = perm_code == "INLINE_CHAT" or meta.get("supports_coding", False)
+                name = meta.get("name", m.get("modelName", model_id))
+                tier = meta.get("tier", "")
+                context = meta.get("context", "")
+                models.append(_make_model(model_id, name, "chat", tier, context))
+                if supports_coding:
+                    models.append(_make_model(f"{model_id}-coding", f"{name} (Coding)", "coding", tier, context))
+        except Exception:
+            pass
+        if len(models) <= 2:
+            for model_id, meta in SPARK_MODEL_META.items():
+                name = meta["name"]
+                tier = meta["tier"]
+                context = meta["context"]
+                models.append(_make_model(model_id, name, "chat", tier, context))
+                if meta["supports_coding"]:
+                    models.append(_make_model(f"{model_id}-coding", f"{name} (Coding)", "coding", tier, context))
+        return JSONResponse(content={"object": "list", "data": models})
 
     @router.get("/health")
     async def health() -> Any:

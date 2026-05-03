@@ -336,6 +336,7 @@ class Database:
 
     def get_stats(self) -> Dict[str, Any]:
         conn = self._get_conn()
+        # All-time totals
         total = conn.execute("SELECT COUNT(*) as cnt FROM request_logs").fetchone()["cnt"]
         by_model = conn.execute(
             "SELECT model, COUNT(*) as cnt FROM request_logs GROUP BY model ORDER BY cnt DESC"
@@ -349,6 +350,37 @@ class Database:
         token_row = conn.execute(
             "SELECT COALESCE(SUM(prompt_tokens),0) as pt, COALESCE(SUM(completion_tokens),0) as ct FROM request_logs"
         ).fetchone()
+        all_time_errors = conn.execute(
+            "SELECT COUNT(*) as cnt FROM request_logs WHERE status_code >= 400"
+        ).fetchone()["cnt"]
+
+        # 24h / today stats
+        h24 = "created_at >= datetime('now', '-24 hours')"
+        today_requests = conn.execute(f"SELECT COUNT(*) as cnt FROM request_logs WHERE {h24}").fetchone()["cnt"]
+        today_errors = conn.execute(f"SELECT COUNT(*) as cnt FROM request_logs WHERE {h24} AND status_code >= 400").fetchone()["cnt"]
+        today_success = today_requests - today_errors
+        today_stream = conn.execute(f"SELECT COUNT(*) as cnt FROM request_logs WHERE {h24} AND stream = 1").fetchone()["cnt"]
+        today_latency = conn.execute(f"SELECT AVG(latency_ms) as avg FROM request_logs WHERE {h24} AND latency_ms > 0").fetchone()["avg"]
+        today_tokens = conn.execute(
+            f"SELECT COALESCE(SUM(prompt_tokens),0) as pt, COALESCE(SUM(completion_tokens),0) as ct FROM request_logs WHERE {h24}"
+        ).fetchone()
+        today_by_model = conn.execute(
+            f"SELECT model, COUNT(*) as cnt FROM request_logs WHERE {h24} AND model != '' GROUP BY model ORDER BY cnt DESC"
+        ).fetchall()
+        today_by_account = conn.execute(
+            f"SELECT api_key, COUNT(*) as cnt FROM request_logs WHERE {h24} GROUP BY api_key ORDER BY cnt DESC"
+        ).fetchall()
+
+        # Hourly stats (24h)
+        hourly = conn.execute(
+            "SELECT strftime('%H', created_at) as hour, "
+            "  COUNT(*) as count, "
+            "  COALESCE(SUM(prompt_tokens),0) as input_tokens, "
+            "  COALESCE(SUM(completion_tokens),0) as output_tokens, "
+            "  SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) as errors "
+            f"FROM request_logs WHERE {h24} GROUP BY hour ORDER BY hour"
+        ).fetchall()
+
         return {
             "total_requests": total,
             "by_model": [{"model": r["model"], "count": r["cnt"]} for r in by_model],
@@ -357,6 +389,23 @@ class Database:
             "accounts_count": conn.execute("SELECT COUNT(*) as cnt FROM accounts").fetchone()["cnt"],
             "prompt_tokens": token_row["pt"],
             "completion_tokens": token_row["ct"],
+            "all_time": {
+                "total_requests": total,
+                "prompt_tokens": token_row["pt"],
+                "completion_tokens": token_row["ct"],
+                "error_count": all_time_errors,
+            },
+            "today_requests": today_requests,
+            "today_success_count": today_success,
+            "today_error_count": today_errors,
+            "today_stream_count": today_stream,
+            "today_avg_latency_ms": round(today_latency or 0, 1),
+            "today_prompt_tokens": today_tokens["pt"],
+            "today_completion_tokens": today_tokens["ct"],
+            "today_by_model": [{"model": r["model"], "count": r["cnt"]} for r in today_by_model],
+            "today_by_account": [{"api_key": r["api_key"], "count": r["cnt"]} for r in today_by_account],
+            "hourly": [{"hour": r["hour"], "count": r["count"], "input_tokens": r["input_tokens"],
+                         "output_tokens": r["output_tokens"], "errors": r["errors"]} for r in hourly],
         }
 
     def get_account_stats(self, account_id: str) -> Dict[str, Any]:
@@ -474,6 +523,9 @@ class Database:
                     "modelId": m.get("modelId", ""),
                     "checked": m.get("checked", False),
                     "tokenExhausted": m.get("tokenExhausted", False),
+                    "permissionCode": m.get("permissionCode", ""),
+                    "permissionName": m.get("permissionName", ""),
+                    "language": m.get("language", ""),
                 })
             return result
         except Exception:

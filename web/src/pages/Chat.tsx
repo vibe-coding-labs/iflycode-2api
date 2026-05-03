@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '../api';
 import type { Account } from '../api';
+import { SPARK_MODELS, getModelTypeLabel } from '../data/sparkModels';
 
 const { TextArea } = Input;
 
@@ -70,55 +71,59 @@ async function clearMessages(accountKey: string): Promise<void> {
 
 const Chat: React.FC = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState<string>('');
-  const [models, setModels] = useState<string[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('iflycode-default');
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [authorizedModels, setAuthorizedModels] = useState<Set<string>>(new Set());
+  const [selectedModel, setSelectedModel] = useState<string>('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  const selectedAccount = accounts.find(a => a.account_id === selectedAccountId);
+  const proxyApiKey = selectedAccount?.api_key || '';
+
   useEffect(() => {
     api.listAccounts().then(accs => {
       setAccounts(accs);
       const defaultAcc = accs.find(a => a.is_default);
       if (defaultAcc) {
-        setSelectedAccount(defaultAcc.api_key);
+        setSelectedAccountId(defaultAcc.account_id);
       } else if (accs.length > 0) {
-        setSelectedAccount(accs[0].api_key);
+        setSelectedAccountId(accs[0].account_id);
       }
     }).catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!selectedAccount) { setModels([]); return; }
-    api.getAccountModels(selectedAccount).then(m => {
-      const codes = m.map((item: { modelCode: string }) => item.modelCode);
-      setModels(codes);
-      if (codes.length > 0 && !codes.includes(selectedModel)) {
-        setSelectedModel(codes[0]);
+    if (!selectedAccountId) { setAuthorizedModels(new Set()); return; }
+    api.getAccountModels(selectedAccountId).then(m => {
+      const codes = new Set(m.map((item: { modelCode: string }) => item.modelCode));
+      setAuthorizedModels(codes);
+      if (!codes.has(selectedModel) && selectedModel !== '') {
+        const firstAuthorized = SPARK_MODELS.find(sm => codes.has(sm.domain));
+        setSelectedModel(firstAuthorized ? firstAuthorized.domain : '');
       }
-    }).catch(() => setModels([]));
-  }, [selectedAccount]);
+    }).catch(() => setAuthorizedModels(new Set()));
+  }, [selectedAccountId]);
 
   useEffect(() => {
-    if (!selectedAccount) return;
-    loadMessages(selectedAccount).then(m => setMessages(m)).catch(() => setMessages([]));
-  }, [selectedAccount]);
+    if (!selectedAccountId) return;
+    loadMessages(selectedAccountId).then(m => setMessages(m)).catch(() => setMessages([]));
+  }, [selectedAccountId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const persistMessages = useCallback((msgs: ChatMessage[]) => {
-    if (!selectedAccount) return;
-    saveMessages(selectedAccount, msgs).catch(() => {});
-  }, [selectedAccount]);
+    if (!selectedAccountId) return;
+    saveMessages(selectedAccountId, msgs).catch(() => {});
+  }, [selectedAccountId]);
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || !selectedAccount || streaming) return;
+    if (!text || !selectedAccountId || streaming) return;
 
     const userMsg: ChatMessage = { role: 'user', content: text };
     const newMessages = [...messages, userMsg];
@@ -138,7 +143,7 @@ const Chat: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': selectedAccount,
+          'x-api-key': proxyApiKey,
         },
         body: JSON.stringify({
           model: selectedModel,
@@ -209,8 +214,8 @@ const Chat: React.FC = () => {
 
   const handleClear = async () => {
     setMessages([]);
-    if (selectedAccount) {
-      await clearMessages(selectedAccount).catch(() => {});
+    if (selectedAccountId) {
+      await clearMessages(selectedAccountId).catch(() => {});
     }
   };
 
@@ -237,29 +242,49 @@ const Chat: React.FC = () => {
         <Typography.Title level={4} style={{ margin: 0 }}>聊天测试</Typography.Title>
         <Space wrap>
           <Select
-            value={selectedAccount}
-            onChange={setSelectedAccount}
+            value={selectedAccountId}
+            onChange={setSelectedAccountId}
             style={{ minWidth: 160, maxWidth: 220 }}
             placeholder="选择账号"
             options={accounts.map(a => ({
-              value: a.api_key,
+              value: a.account_id,
               label: (
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {a.is_default ? '★ ' : ''}{a.api_key}
+                  {a.is_default ? '★ ' : ''}{a.account_id}
                 </span>
               ),
             }))}
           />
           <Select
-            value={selectedModel}
+            value={selectedModel || undefined}
             onChange={setSelectedModel}
-            style={{ minWidth: 140, maxWidth: 200 }}
+            style={{ minWidth: 180, maxWidth: 280 }}
             placeholder="选择模型"
+            allowClear
             options={[
-              { value: 'iflycode-default', label: '默认模型' },
-              ...models.map(m => ({ value: m, label: m })),
+              { value: '', label: '自动选择 (Chat)' },
+              { value: 'iflycode-default-coding', label: '自动选择 (Coding)' },
+              ...SPARK_MODELS.filter(m => m.status === 'available').flatMap(m => {
+                const auth = authorizedModels.has(m.domain);
+                const suffix = auth ? '' : '（未授权）';
+                const items: { value: string; label: string }[] = [
+                  { value: m.domain, label: `${m.name} [Chat]${suffix}` },
+                ];
+                if (m.supportsCoding) {
+                  items.push({ value: `${m.domain}-coding`, label: `${m.name} [Coding]${suffix}` });
+                }
+                return items;
+              }),
             ]}
           />
+          {selectedModel && !selectedModel.endsWith('-coding') && (() => {
+            const m = SPARK_MODELS.find(sm => sm.domain === selectedModel);
+            return m && !m.supportsCoding ? (
+              <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                当前模型仅支持 Chat，不支持工具调用
+              </Typography.Text>
+            ) : null;
+          })()}
           <Popconfirm title="清空所有对话记录？" onConfirm={handleClear}>
             <Button icon={<ClearOutlined />}>清空</Button>
           </Popconfirm>
@@ -287,14 +312,14 @@ const Chat: React.FC = () => {
               }}
             >
               {msg.role === 'assistant' && (
-                <Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#1677ff', flexShrink: 0, marginRight: 10, marginTop: 2 }} />
+                <Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#389e0d', flexShrink: 0, marginRight: 10, marginTop: 2 }} />
               )}
               <div
                 style={{
                   maxWidth: '75%',
                   padding: '10px 16px',
                   borderRadius: 12,
-                  backgroundColor: msg.role === 'user' ? '#1677ff' : '#fff',
+                  backgroundColor: msg.role === 'user' ? '#389e0d' : '#fff',
                   color: msg.role === 'user' ? '#fff' : '#333',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
@@ -346,7 +371,7 @@ const Chat: React.FC = () => {
             type="primary"
             icon={<SendOutlined />}
             onClick={handleSend}
-            disabled={!input.trim() || !selectedAccount}
+            disabled={!input.trim() || !selectedAccountId}
             size="large"
             style={{ height: 'auto', minHeight: 56, borderRadius: 8, paddingInline: 28 }}
           >
