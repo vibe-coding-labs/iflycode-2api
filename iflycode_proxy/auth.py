@@ -1,6 +1,7 @@
 """iFlyCode SSO authentication service — handles login URL and token retrieval."""
 
 import logging
+import re
 import uuid
 from typing import Optional
 
@@ -16,19 +17,38 @@ LOGIN_STATUS_ENDPOINT = "/api/starspark/v1/user/authorizationQuery"
 _pending_sessions: dict[str, dict] = {}
 
 
+def _safe_json(resp: httpx.Response) -> tuple[dict, str]:
+    """Try to parse response as JSON. Returns (data, error_msg).
+
+    If the response is not valid JSON (e.g. HTML from a gateway), returns
+    ({}, error_msg) with a clean Chinese error message.
+    """
+    try:
+        return resp.json(), ""
+    except Exception:
+        # Clean up HTML/tag fragments from error snippet
+        snippet = re.sub(r'<[^>]+>', '', resp.text[:150])
+        snippet = re.sub(r'\s+', ' ', snippet).strip()
+        return {}, f"上游服务异常 (HTTP {resp.status_code})"
+
+
 def get_login_url() -> dict:
     """Fetch SSO login URL from iFlyCode and return it with a generated clientId."""
     try:
         with httpx.Client(base_url=BASE_URL, timeout=10) as http:
             resp = http.get(LOGIN_URL_ENDPOINT)
-            data = resp.json()
+            data, err = _safe_json(resp)
+            if err:
+                log.error("Failed to fetch login URL: %s", err)
+                return {"ok": False, "error": err}
     except Exception as e:
         log.error("Failed to fetch login URL: %s", e)
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": f"无法连接上游服务: {e}"}
 
     code = str(data.get("resCode", data.get("code", "")))
     if code not in ("0", "200"):
-        return {"ok": False, "error": data.get("message", f"API returned code {code}")}
+        msg = data.get("message", f"API returned code {code}")
+        return {"ok": False, "error": msg}
 
     obj = data.get("obj") or data.get("data") or {}
     login_url = obj.get("loginUrl", "")
@@ -59,7 +79,10 @@ def poll_login_status(client_id: str) -> dict:
                 LOGIN_STATUS_ENDPOINT,
                 headers={"Content-Type": "application/json", "clientId": client_id},
             )
-            data = resp.json()
+            data, err = _safe_json(resp)
+            if err:
+                log.warning("Login status poll failed: %s", err)
+                return {"ok": False, "status": "pending", "error": err}
     except Exception as e:
         log.warning("Login status poll failed: %s", e)
         return {"ok": False, "status": "pending", "error": str(e)}

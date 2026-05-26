@@ -20,6 +20,7 @@ from openai.types.model import Model
 
 from iflycode_proxy.credential_router import CredentialRouter
 from iflycode_proxy.proxy_logger import log_request, log_response, log_error
+from iflycode_proxy.sessions import record_session
 
 log = logging.getLogger("iflycode-proxy.openai")
 
@@ -255,6 +256,14 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
                 context={"reason": "authentication_failed"},
             )
             return _error_response("No account available. Add an account via /api/accounts first.", 401)
+
+        # Record session activity
+        account_id = cred_router.get_account_id(api_key or None) or api_key
+        session_id = request.headers.get("x-session-id", "")
+        if not session_id:
+            import uuid
+            session_id = str(uuid.uuid4())
+        record_session(account_id, session_id)
 
         try:
             req_body = await request.json()

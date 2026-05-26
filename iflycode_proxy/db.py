@@ -5,7 +5,7 @@ import logging
 import secrets
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 log = logging.getLogger("iflycode-proxy.db")
 
@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     user_id TEXT NOT NULL DEFAULT '',
     is_default INTEGER NOT NULL DEFAULT 0,
     default_model TEXT NOT NULL DEFAULT '',
+    credential_valid INTEGER DEFAULT -1,
+    credential_error TEXT DEFAULT '',
+    credential_refreshed_at TEXT DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -61,7 +64,7 @@ class Database:
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
-            self._conn = sqlite3.connect(str(self.db_path))
+            self._conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
@@ -70,20 +73,23 @@ class Database:
         return self._conn
 
     def _migrate(self):
-        """Migrate old schema (api_key as PK) to new schema (account_id as PK)."""
-        conn = self._conn
-        # Check if migration is needed by looking for account_id column
+        """Migrate schema as needed."""
+        conn = self._get_conn()
+        # Migration 1: account_id as PK
         cols = [r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()]
-        if "account_id" in cols:
-            return
+        if "account_id" not in cols:
+            self._migrate_account_pk(conn)
+        # Migration 2: credential_valid, credential_error, credential_refreshed_at
+        if "credential_valid" not in cols:
+            conn.executescript("""
+                ALTER TABLE accounts ADD COLUMN credential_valid INTEGER DEFAULT -1;
+                ALTER TABLE accounts ADD COLUMN credential_error TEXT DEFAULT '';
+                ALTER TABLE accounts ADD COLUMN credential_refreshed_at TEXT DEFAULT '';
+            """)
+            log.info("Migration: added credential_status columns to accounts")
 
-        log.info("Migrating accounts table: api_key PK -> account_id PK")
-        # Old table has: api_key (PK), token, user_id, is_default, default_model, created_at, updated_at
-        # We need to:
-        # 1. Read all existing data
-        # 2. Drop old table
-        # 3. Create new table
-        # 4. Insert migrated data
+    def _migrate_account_pk(self, conn):
+        """Migrate old schema (api_key as PK) to new schema (account_id as PK)."""
 
         rows = conn.execute("SELECT api_key, token, user_id, is_default, default_model, created_at, updated_at FROM accounts").fetchall()
 
@@ -163,7 +169,11 @@ class Database:
     def list_accounts(self) -> List[Dict[str, Any]]:
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT account_id, api_key, user_id, is_default, default_model, created_at FROM accounts ORDER BY created_at"
+            "SELECT account_id, api_key, user_id, is_default, default_model, created_at, "
+            "  COALESCE(credential_valid, -1) as credential_valid, "
+            "  COALESCE(credential_error, '') as credential_error, "
+            "  COALESCE(credential_refreshed_at, '') as credential_refreshed_at "
+            "FROM accounts ORDER BY created_at"
         ).fetchall()
         return [
             {
@@ -173,6 +183,9 @@ class Database:
                 "is_default": bool(r["is_default"]),
                 "default_model": r["default_model"] or "",
                 "created_at": r["created_at"],
+                "credential_valid": r["credential_valid"],
+                "credential_error": r["credential_error"],
+                "credential_refreshed_at": r["credential_refreshed_at"],
             }
             for r in rows
         ]
@@ -543,3 +556,38 @@ class Database:
                     default_model=full.get("default_model", ""),
                 )
         return router
+
+    # -- Credential status --
+
+    def set_credential_status(self, account_id: str, valid: bool, error: str = ""):
+        """Update credential validation result for an account."""
+        conn = self._get_conn()
+        conn.execute(
+            "UPDATE accounts SET credential_valid = ?, credential_error = ?, "
+            "  credential_refreshed_at = datetime('now'), updated_at = datetime('now') "
+            "WHERE account_id = ?",
+            (1 if valid else 0, error, account_id),
+        )
+        conn.commit()
+
+    def get_stale_accounts(self, normal_ttl_hours: int = 1, backoff_multiplier: int = 4) -> List[Dict[str, Any]]:
+        """Return accounts that need credential re-validation.
+
+        - valid accounts (credential_valid=1): last refreshed > normal_ttl_hours ago
+        - failed accounts (credential_valid=0): last refreshed > normal_ttl_hours * backoff_multiplier ago
+        - unknown accounts (credential_valid=-1 or never refreshed): always included
+        """
+        conn = self._get_conn()
+        normal_cutoff = f"-{normal_ttl_hours} hours"
+        backoff_cutoff = f"-{normal_ttl_hours * backoff_multiplier} hours"
+        rows = conn.execute(
+            "SELECT account_id, api_key, user_id, is_default, default_model, credential_valid, credential_refreshed_at "
+            "FROM accounts WHERE "
+            "  credential_refreshed_at = '' OR credential_refreshed_at IS NULL "
+            "  OR credential_valid = -1 "
+            "  OR (credential_valid = 1 AND credential_refreshed_at < datetime('now', ?)) "
+            "  OR (credential_valid = 0 AND credential_refreshed_at < datetime('now', ?)) "
+            "ORDER BY created_at",
+            (normal_cutoff, backoff_cutoff),
+        ).fetchall()
+        return [dict(r) for r in rows]

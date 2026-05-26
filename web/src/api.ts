@@ -5,6 +5,10 @@ export interface Account {
   is_default: boolean;
   default_model: string;
   created_at?: string;
+  credential_valid: number; // -1=unknown, 0=expired, 1=valid
+  credential_error: string;
+  credential_refreshed_at: string;
+  active_sessions: number;
 }
 
 export interface Stats {

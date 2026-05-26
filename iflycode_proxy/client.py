@@ -5,6 +5,7 @@ import logging
 import re
 import time
 import uuid
+from json import JSONDecodeError
 from typing import Any, Dict, Iterator, List, Optional
 
 import httpx
@@ -119,9 +120,9 @@ class Client:
             try:
                 resp = self._http.post(url, headers=self._headers(), json=body)
                 resp.raise_for_status()
-                data = resp.json()
+                resp_text = resp.text
+                data = json.loads(resp_text)
                 # Check for upstream engine errors in the response body
-                resp_text = json.dumps(data)
                 if _is_retryable_error(resp_text) and attempt < _MAX_RETRIES:
                     log.warning("Upstream retryable error on attempt %d/%d, retrying in %.1fs: %s",
                                 attempt + 1, _MAX_RETRIES, backoff, resp_text[:200])
@@ -138,6 +139,24 @@ class Client:
                 if _is_retryable_error(resp_text) and attempt < _MAX_RETRIES:
                     log.warning("Upstream HTTP %d error on attempt %d/%d, retrying in %.1fs",
                                 exc.response.status_code, attempt + 1, _MAX_RETRIES, backoff)
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, _MAX_BACKOFF)
+                    last_exc = exc
+                    continue
+                raise
+            except (httpx.ConnectError, httpx.ReadError, httpx.WriteError, httpx.PoolTimeout) as exc:
+                if attempt < _MAX_RETRIES:
+                    log.warning("Connection error on attempt %d/%d, retrying in %.1fs: %s",
+                                attempt + 1, _MAX_RETRIES, backoff, exc)
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, _MAX_BACKOFF)
+                    last_exc = exc
+                    continue
+                raise
+            except JSONDecodeError as exc:
+                log.error("Upstream non-JSON response on attempt %d/%d: %s",
+                          attempt + 1, _MAX_RETRIES, exc)
+                if attempt < _MAX_RETRIES:
                     time.sleep(backoff)
                     backoff = min(backoff * 2, _MAX_BACKOFF)
                     last_exc = exc

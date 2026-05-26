@@ -1,12 +1,13 @@
 """Web API endpoints for frontend management."""
 
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
 from iflycode_proxy.auth import get_login_url, poll_login_status
 from iflycode_proxy.db import Database, _generate_account_id, _generate_api_key
+from iflycode_proxy.sessions import get_active_sessions, get_all_active_counts, session_stats
 
 log = logging.getLogger("iflycode-proxy.web-api")
 
@@ -14,11 +15,20 @@ log = logging.getLogger("iflycode-proxy.web-api")
 def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
     router = APIRouter(prefix="/api")
 
+    def _get_keeper(request: Request):
+        return getattr(request.app.state, "keeper", None)
+
     # -- Accounts --
 
     @router.get("/accounts")
     async def list_accounts():
-        return {"accounts": db.list_accounts()}
+        accounts = db.list_accounts()
+        # Enrich with active sessions
+        active_counts = get_all_active_counts()
+        for acc in accounts:
+            acc_id = acc.get("account_id", "")
+            acc["active_sessions"] = active_counts.get(acc_id, 0)
+        return {"accounts": accounts}
 
     @router.post("/accounts")
     async def add_account(request: Request):
@@ -32,31 +42,99 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
         if not spark_token:
             raise HTTPException(400, "spark_token (or token) is required")
         db.add_account(account_id, api_key, spark_token, user_id, is_default=is_default, default_model=default_model)
+
+        # Trigger immediate credential check (fire-and-forget)
+        k = _get_keeper(request)
+        if k:
+            import threading
+            threading.Thread(target=k.trigger_immediate_check, args=(account_id,), daemon=True).start()
+
         return {"ok": True, "account_id": account_id, "api_key": api_key}
 
-    @router.delete("/accounts/{account_id:path}")
+    @router.delete("/accounts/{account_id}")
     async def remove_account(account_id: str):
         if not db.remove_account(account_id):
             raise HTTPException(404, f"Account '{account_id}' not found")
         return {"ok": True}
 
-    @router.put("/accounts/{account_id:path}/default")
+    @router.put("/accounts/{account_id}/default")
     async def set_default(account_id: str):
         if not db.set_default(account_id):
             raise HTTPException(404, f"Account '{account_id}' not found")
         return {"ok": True}
 
-    @router.post("/accounts/{account_id:path}/validate")
-    async def validate_account(account_id: str):
+    @router.post("/accounts/{account_id}/validate")
+    async def validate_account(request: Request, account_id: str):
+        k = _get_keeper(request)
+        if k:
+            cached = k.get_cached_status(account_id)
+            if cached["age_seconds"] < 60 and cached["valid"] is not None:
+                return {"account_id": account_id, "valid": cached["valid"], "error": cached.get("error", ""), "cached": True}
+            # Force re-check
+            valid = k.trigger_immediate_check(account_id)
+            if valid is not None:
+                error = "" if valid else "credential check failed"
+                return {"account_id": account_id, "valid": valid, "error": error, "cached": False}
+        # Fallback: direct check
         valid = db.validate_account(account_id)
+        return {"account_id": account_id, "valid": valid, "cached": False}
+
+    @router.get("/accounts/{account_id}/credential-status")
+    async def get_credential_status(request: Request, account_id: str):
+        """Return the current credential validation status."""
+        status = {"valid": None, "error": "", "last_checked": "", "cached": False}
+        k = _get_keeper(request)
+        if k:
+            cached = k.get_cached_status(account_id)
+            if cached["valid"] is not None:
+                status["valid"] = cached["valid"]
+                status["error"] = cached.get("error", "")
+                status["cached"] = True
+        # Fallback: read from DB
+        if status["valid"] is None:
+            conn = db._get_conn()
+            row = conn.execute(
+                "SELECT credential_valid, credential_error, credential_refreshed_at "
+                "FROM accounts WHERE account_id = ?", (account_id,)
+            ).fetchone()
+            if row:
+                cv = row["credential_valid"]
+                status["valid"] = cv == 1 if cv != -1 else None
+                # sqlite3.Row doesn't support .get(), use try/except
+                try:
+                    status["error"] = row["credential_error"] or ""
+                except (KeyError, IndexError):
+                    status["error"] = ""
+                try:
+                    status["last_checked"] = row["credential_refreshed_at"] or ""
+                except (KeyError, IndexError):
+                    status["last_checked"] = ""
+        return status
+
+    @router.post("/accounts/{account_id}/trigger-validation")
+    async def trigger_validation(request: Request, account_id: str):
+        """Force an immediate credential check and return result."""
+        k = _get_keeper(request)
+        if k:
+            valid = k.trigger_immediate_check(account_id)
+            if valid is not None:
+                return {"account_id": account_id, "valid": valid}
+        # Fallback
+        valid = db.validate_account(account_id)
+        db.set_credential_status(account_id, valid, "" if valid else "credential check failed")
         return {"account_id": account_id, "valid": valid}
 
-    @router.get("/accounts/{account_id:path}/models")
+    @router.get("/accounts/{account_id}/sessions")
+    async def get_account_sessions(account_id: str):
+        count = get_active_sessions(account_id)
+        return {"account_id": account_id, "active_sessions": count}
+
+    @router.get("/accounts/{account_id}/models")
     async def list_account_models(account_id: str):
         models = db.get_account_models(account_id)
         return {"models": models}
 
-    @router.put("/accounts/{account_id:path}/model")
+    @router.put("/accounts/{account_id}/model")
     async def update_account_model(account_id: str, request: Request):
         body = await request.json()
         default_model = body.get("default_model", "").strip()
@@ -65,23 +143,23 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
             cred_router.set_default_model(account_id, default_model)
         return {"ok": True, "account_id": account_id, "default_model": default_model}
 
-    @router.get("/accounts/{account_id:path}/stats")
+    @router.get("/accounts/{account_id}/stats")
     async def get_account_stats(account_id: str):
         return db.get_account_stats(account_id)
 
-    @router.get("/accounts/{account_id:path}/hourly-stats")
+    @router.get("/accounts/{account_id}/hourly-stats")
     async def get_account_hourly_stats(account_id: str, hours: int = 24):
         if hours < 1 or hours > 720:
             hours = 24
         return {"hours": hours, "data": db.get_account_hourly_stats(account_id, hours)}
 
-    @router.get("/accounts/{account_id:path}/recent-logs")
+    @router.get("/accounts/{account_id}/recent-logs")
     async def get_account_recent_logs(account_id: str, limit: int = 20):
         if limit < 1 or limit > 100:
             limit = 20
         return {"logs": db.get_account_recent_logs(account_id, limit)}
 
-    @router.post("/accounts/{account_id:path}/renew-key")
+    @router.post("/accounts/{account_id}/renew-key")
     async def renew_api_key(account_id: str):
         new_key = db.renew_api_key(account_id)
         if not new_key:
@@ -169,6 +247,51 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
         from iflycode_proxy.proxy_logger import get_log_files
         return {"logs": log_lines, "files": get_log_files()}
 
+    # -- Sessions --
+
+    @router.get("/sessions")
+    async def get_session_stats():
+        return session_stats()
+
+    # -- Keepalive --
+
+    @router.get("/keepalive/statuses")
+    async def get_keepalive_statuses(request: Request):
+        k = _get_keeper(request)
+        if k:
+            return {"statuses": k.get_all_cached_statuses()}
+        return {"statuses": {}}
+
+    @router.post("/keepalive/trigger")
+    async def trigger_keepalive_now(request: Request, account_id: str = ""):
+        """Trigger an immediate keepalive check round.
+
+        If account_id is provided, only that account is checked.
+        Otherwise all stale accounts are checked.
+        """
+        k = _get_keeper(request)
+        if k:
+            import threading
+            if account_id:
+                threading.Thread(target=k.trigger_immediate_check, args=(account_id,), daemon=True).start()
+                return {"ok": True, "message": f"Keepalive check triggered for {account_id}"}
+            else:
+                # Trigger a full round by running check_round in background
+                def _run_round():
+                    try:
+                        stale = db.get_stale_accounts()
+                        for acc in stale:
+                            aid = acc.get("account_id") or acc.get("id", "")
+                            if aid:
+                                k.trigger_immediate_check(aid)
+                                import time
+                                time.sleep(2)
+                    except Exception:
+                        pass
+                threading.Thread(target=_run_round, daemon=True).start()
+                return {"ok": True, "message": "Full keepalive round triggered"}
+        return {"ok": False, "message": "Keepalive not available"}
+
     # -- Health --
 
     @router.get("/health")
@@ -180,6 +303,13 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
             db_size_mb = os.path.getsize(str(db.db_path)) / (1024 * 1024)
         except OSError:
             pass
-        return {"status": "ok", "accounts": len(accounts), "version": "1.0.0", "db_size_mb": round(db_size_mb, 2)}
+        s = session_stats()
+        return {
+            "status": "ok",
+            "accounts": len(accounts),
+            "version": "1.0.0",
+            "db_size_mb": round(db_size_mb, 2),
+            "active_sessions": s.get("active_sessions", 0),
+        }
 
     return router

@@ -1,13 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Table, Button, Space, Modal, Form, Input, Switch,
-  message, Popconfirm, Tag, Typography, Alert, Tabs, Spin, Popover,
+  Table, Button, Space, Form, Input, Switch,
+  message, Popconfirm, Tag, Typography, Alert, Popover, Modal, notification,
 } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
-  PlusOutlined, DeleteOutlined, StarOutlined,
+  DeleteOutlined, StarOutlined,
   SafetyCertificateOutlined, ReloadOutlined, LoginOutlined,
   CheckCircleOutlined, LoadingOutlined, CopyOutlined,
+  CloseCircleOutlined, QuestionCircleOutlined, PlusOutlined,
 } from '@ant-design/icons';
 import { AnthropicIcon, OpenAIIcon } from '../components/BrandIcons';
 import { api } from '../api';
@@ -86,16 +87,12 @@ const Accounts: React.FC = () => {
   const navigate = useNavigate();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
   const [validating, setValidating] = useState<string | null>(null);
+  const [manualModalOpen, setManualModalOpen] = useState(false);
 
   // SSO login state
-  const [ssoLoginUrl, setSsoLoginUrl] = useState('');
-  const [ssoClientId, setSsoClientId] = useState('');
   const [ssoLoading, setSsoLoading] = useState(false);
-  const [ssoPolling, setSsoPolling] = useState(false);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -112,14 +109,13 @@ const Accounts: React.FC = () => {
   useEffect(() => { fetchAccounts(); }, []);
 
   useEffect(() => {
-    return () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); };
+    return () => { notification.destroy('sso-polling'); };
   }, []);
 
   const handleAdd = async (values: { spark_token: string; user_id?: string; is_default?: boolean }) => {
     try {
       const result = await api.addAccount({ spark_token: values.spark_token, user_id: values.user_id, is_default: values.is_default });
       message.success(`账号「${result.account_id}」添加成功`);
-      setModalOpen(false);
       form.resetFields();
       fetchAccounts();
     } catch (e: unknown) {
@@ -165,15 +161,35 @@ const Accounts: React.FC = () => {
 
   const handleSSOLogin = async () => {
     setSsoLoading(true);
-    setSsoLoginUrl('');
-    setSsoClientId('');
     try {
       const result = await api.getLoginUrl();
       if (result.login_url) {
-        setSsoLoginUrl(result.login_url);
-        setSsoClientId(result.client_id);
         window.open(result.login_url, '_blank');
-        startPolling(result.client_id);
+        const key = 'sso-polling';
+        notification.info({
+          key,
+          message: 'SSO 登录',
+          description: '已在浏览器中打开 iFlyCode 登录页面，等待登录完成...',
+          duration: null,
+        });
+        // Start polling
+        const clientId = result.client_id;
+        const pollTimer = setInterval(async () => {
+          try {
+            const pollResult = await api.pollLoginStatus(clientId);
+            if (pollResult.ok && pollResult.token) {
+              clearInterval(pollTimer);
+              await api.addAccountFromSSO({
+                token: pollResult.token,
+                user_id: pollResult.user_id || '',
+              });
+              notification.success({ key, message: 'SSO 登录成功', description: '已自动添加账号', duration: 3 });
+              fetchAccounts();
+            }
+          } catch {
+            // keep polling
+          }
+        }, 2000);
       }
     } catch (e: unknown) {
       message.error(e instanceof Error ? e.message : '获取登录地址失败');
@@ -182,47 +198,17 @@ const Accounts: React.FC = () => {
     }
   };
 
-  const startPolling = (clientId: string) => {
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    setSsoPolling(true);
-    pollTimerRef.current = setInterval(async () => {
-      try {
-        const result = await api.pollLoginStatus(clientId);
-        if (result.ok && result.token) {
-          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-          setSsoPolling(false);
-          const addResult = await api.addAccountFromSSO({
-            token: result.token,
-            user_id: result.user_id || '',
-          });
-          message.success(`SSO 登录成功，已添加账号`);
-          setModalOpen(false);
-          fetchAccounts();
-        }
-      } catch {
-        // keep polling
-      }
-    }, 2000);
-  };
-
-  const handleModalClose = () => {
-    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-    setSsoPolling(false);
-    setSsoLoginUrl('');
-    setSsoClientId('');
-    setModalOpen(false);
-    form.resetFields();
-  };
-
   const columns = [
     {
-      title: '账号 ID',
-      dataIndex: 'account_id',
+      title: '账号',
       key: 'account_id',
-      render: (text: string) => (
-        <Typography.Text code style={{ cursor: 'pointer' }} onClick={() => navigate(`/accounts/${encodeURIComponent(text)}`)}>
-          {text}
-        </Typography.Text>
+      render: (_: unknown, record: Account) => (
+        <Space>
+          <Typography.Text code style={{ cursor: 'pointer' }} onClick={() => navigate(`/accounts/${encodeURIComponent(record.account_id)}`)}>
+            {record.account_id}
+          </Typography.Text>
+          {record.is_default && <Tag color="blue"><StarOutlined /> 默认</Tag>}
+        </Space>
       ),
     },
     {
@@ -248,10 +234,26 @@ const Accounts: React.FC = () => {
       render: (val: string) => val ? <Tag color="green">{val}</Tag> : <Typography.Text type="secondary">自动</Typography.Text>,
     },
     {
-      title: '状态',
-      dataIndex: 'is_default',
-      key: 'is_default',
-      render: (val: boolean) => val ? <Tag color="blue"><StarOutlined /> 默认账号</Tag> : null,
+      title: '凭据状态',
+      key: 'credential_status',
+      render: (_: unknown, record: Account) => {
+        const cv = record.credential_valid;
+        const sessions = record.active_sessions ?? 0;
+        return (
+          <Space>
+            {cv === 1 ? (
+              <Tag color="green"><CheckCircleOutlined /> 有效</Tag>
+            ) : cv === 0 ? (
+              <Tag color="red"><CloseCircleOutlined /> 已过期</Tag>
+            ) : (
+              <Tag color="warning"><QuestionCircleOutlined /> 未检测</Tag>
+            )}
+            {sessions > 0 && (
+              <Tag color="blue">{sessions} 会话</Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: '操作',
@@ -305,12 +307,9 @@ const Accounts: React.FC = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography.Title level={4} style={{ margin: 0 }}>账号管理</Typography.Title>
-        <Space>
-          <Button onClick={fetchAccounts} icon={<ReloadOutlined />}>刷新</Button>
-          <Button type="primary" onClick={() => setModalOpen(true)} icon={<PlusOutlined />}>添加账号</Button>
-        </Space>
+        <Button onClick={fetchAccounts} icon={<ReloadOutlined />}>刷新</Button>
       </div>
 
       <Alert
@@ -321,100 +320,55 @@ const Accounts: React.FC = () => {
         style={{ marginBottom: 16 }}
       />
 
+      {/* Import buttons */}
+      <Space style={{ marginBottom: 16 }}>
+        <Button type="primary" icon={<LoginOutlined />} loading={ssoLoading} onClick={handleSSOLogin}>
+          SSO 登录导入
+        </Button>
+        <Button icon={<PlusOutlined />} onClick={() => { setManualModalOpen(true); }}>
+          手动粘贴 Token
+        </Button>
+      </Space>
+
       <Table
         dataSource={accounts}
         columns={columns}
         rowKey="account_id"
         loading={loading}
         pagination={false}
-        locale={{ emptyText: '暂无账号，请点击「添加账号」' }}
+        locale={{ emptyText: '暂无账号，请点击上方按钮添加' }}
         onRow={(record) => ({
           onClick: () => navigate(`/accounts/${encodeURIComponent(record.account_id)}`),
           style: { cursor: 'pointer' },
         })}
       />
 
+      {/* Manual Paste Modal */}
       <Modal
-        title="添加 iFlyCode 账号"
-        open={modalOpen}
-        onCancel={handleModalClose}
+        title="手动粘贴 Token 添加账号"
+        open={manualModalOpen}
+        onCancel={() => { setManualModalOpen(false); form.resetFields(); }}
         footer={null}
-        width={560}
+        width={480}
         destroyOnClose
       >
-        <Tabs
-          items={[
-            {
-              key: 'sso',
-              label: 'SSO 登录',
-              children: (
-                <div style={{ padding: '12px 0' }}>
-                  <Typography.Paragraph>
-                    通过 iFlyCode 官方 SSO 登录，与 IDE 端登录方式一致。点击按钮打开登录页面，完成登录后 token 将自动获取并添加到账号池。
-                  </Typography.Paragraph>
-                  {!ssoLoginUrl ? (
-                    <Button
-                      type="primary"
-                      size="large"
-                      icon={<LoginOutlined />}
-                      loading={ssoLoading}
-                      onClick={handleSSOLogin}
-                      block
-                    >
-                      打开 iFlyCode 登录
-                    </Button>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                      {ssoPolling ? (
-                        <>
-                          <Spin indicator={<LoadingOutlined style={{ fontSize: 32 }} />} />
-                          <Typography.Paragraph style={{ marginTop: 16 }}>
-                            等待登录完成...
-                          </Typography.Paragraph>
-                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            请在浏览器中完成登录
-                          </Typography.Text>
-                        </>
-                      ) : (
-                        <Typography.Text type="success">
-                          <CheckCircleOutlined /> 登录成功
-                        </Typography.Text>
-                      )}
-                      <div style={{ marginTop: 12 }}>
-                        <Button size="small" type="link" onClick={() => window.open(ssoLoginUrl, '_blank')}>
-                          重新打开登录页面
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ),
-            },
-            {
-              key: 'manual',
-              label: '手动粘贴 Token',
-              children: (
-                <Form form={form} layout="vertical" onFinish={handleAdd} style={{ padding: '12px 0' }}>
-                  <Form.Item name="spark_token" label="iFlyCode SSO Token" rules={[{ required: true, message: '请输入 token' }]}>
-                    <Input.Password placeholder="从 iFlyCode 登录后获取的 token" />
-                  </Form.Item>
-                  <Form.Item name="user_id" label="用户 ID">
-                    <Input placeholder="可选" />
-                  </Form.Item>
-                  <Form.Item name="is_default" valuePropName="checked" label="设为默认账号">
-                    <Switch />
-                  </Form.Item>
-                  <Form.Item>
-                    <Space>
-                      <Button type="primary" htmlType="submit">添加</Button>
-                      <Button onClick={handleModalClose}>取消</Button>
-                    </Space>
-                  </Form.Item>
-                </Form>
-              ),
-            },
-          ]}
-        />
+        <Form form={form} layout="vertical" onFinish={(values) => { handleAdd(values); setManualModalOpen(false); }} style={{ padding: '12px 0' }}>
+          <Form.Item name="spark_token" label="iFlyCode SSO Token" rules={[{ required: true, message: '请输入 token' }]}>
+            <Input.Password placeholder="从 iFlyCode 登录后获取的 token" />
+          </Form.Item>
+          <Form.Item name="user_id" label="用户 ID">
+            <Input placeholder="可选" />
+          </Form.Item>
+          <Form.Item name="is_default" valuePropName="checked" label="设为默认账号">
+            <Switch />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">添加</Button>
+              <Button onClick={() => { setManualModalOpen(false); form.resetFields(); }}>取消</Button>
+            </Space>
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );
