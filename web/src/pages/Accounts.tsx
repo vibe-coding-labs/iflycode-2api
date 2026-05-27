@@ -166,11 +166,14 @@ const Accounts: React.FC = () => {
       if (result.login_url) {
         window.open(result.login_url, '_blank');
         const key = 'sso-polling';
+        const fallbackMsg = result.fallback
+          ? '（使用备用登录地址，iFlyCode 平台可能暂时不稳定）'
+          : '';
         notification.info({
           key,
           message: 'SSO 登录',
-          description: '已在浏览器中打开 iFlyCode 登录页面，等待登录完成...',
-          duration: null,
+          description: `已在浏览器中打开 iFlyCode 登录页面，等待登录完成...${fallbackMsg}`,
+          duration: 0,
         });
         // Start polling
         const clientId = result.client_id;

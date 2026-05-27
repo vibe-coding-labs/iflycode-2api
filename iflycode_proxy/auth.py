@@ -10,6 +10,7 @@ import httpx
 log = logging.getLogger("iflycode-proxy.auth")
 
 BASE_URL = "https://iflycode-xfsaas.xfyun.cn"
+FALLBACK_LOGIN_URL = "https://iflycode.xfyun.cn/chooseIdentity"
 LOGIN_URL_ENDPOINT = "/api/starspark/v1/agent/authSetting/query"
 LOGIN_STATUS_ENDPOINT = "/api/starspark/v1/user/authorizationQuery"
 
@@ -33,27 +34,53 @@ def _safe_json(resp: httpx.Response) -> tuple[dict, str]:
 
 
 def get_login_url() -> dict:
-    """Fetch SSO login URL from iFlyCode and return it with a generated clientId."""
-    try:
-        with httpx.Client(base_url=BASE_URL, timeout=10) as http:
-            resp = http.get(LOGIN_URL_ENDPOINT)
-            data, err = _safe_json(resp)
-            if err:
-                log.error("Failed to fetch login URL: %s", err)
-                return {"ok": False, "error": err}
-    except Exception as e:
-        log.error("Failed to fetch login URL: %s", e)
-        return {"ok": False, "error": f"无法连接上游服务: {e}"}
+    """Fetch SSO login URL from iFlyCode and return it with a generated clientId.
 
-    code = str(data.get("resCode", data.get("code", "")))
-    if code not in ("0", "200"):
-        msg = data.get("message", f"API returned code {code}")
-        return {"ok": False, "error": msg}
+    Falls back to a hardcoded URL when the upstream API is unavailable.
+    """
+    import time
 
-    obj = data.get("obj") or data.get("data") or {}
-    login_url = obj.get("loginUrl", "")
-    if not login_url:
-        return {"ok": False, "error": "loginUrl not found in response"}
+    login_url = ""
+    last_error = ""
+
+    for attempt in range(2):
+        try:
+            with httpx.Client(base_url=BASE_URL, timeout=10) as http:
+                resp = http.get(LOGIN_URL_ENDPOINT)
+                data, err = _safe_json(resp)
+                if err:
+                    last_error = err
+                    if attempt == 0:
+                        time.sleep(1)
+                        continue
+                    break
+                code = str(data.get("resCode", data.get("code", "")))
+                if code not in ("0", "200"):
+                    msg = data.get("message", f"API returned code {code}")
+                    last_error = msg
+                    if attempt == 0:
+                        time.sleep(1)
+                        continue
+                    break
+                obj = data.get("obj") or data.get("data") or {}
+                login_url = obj.get("loginUrl", "")
+                if not login_url:
+                    last_error = "loginUrl not found in response"
+                    if attempt == 0:
+                        time.sleep(1)
+                        continue
+                break
+        except Exception as e:
+            last_error = f"无法连接上游服务: {e}"
+            if attempt == 0:
+                time.sleep(1)
+                continue
+
+    # Fallback: use hardcoded login URL when API fails
+    is_fallback = not login_url
+    if is_fallback:
+        login_url = FALLBACK_LOGIN_URL
+        log.warning("Using fallback login URL (upstream error: %s)", last_error)
 
     client_id = str(uuid.uuid4())
     separator = "&" if "?" in login_url else "?"
@@ -61,11 +88,15 @@ def get_login_url() -> dict:
 
     _pending_sessions[client_id] = {"login_url": full_url, "status": "pending"}
 
-    return {
+    result = {
         "ok": True,
         "login_url": full_url,
         "client_id": client_id,
     }
+    if is_fallback:
+        result["fallback"] = True
+        result["upstream_error"] = last_error
+    return result
 
 
 def poll_login_status(client_id: str) -> dict:

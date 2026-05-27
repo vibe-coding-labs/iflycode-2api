@@ -159,7 +159,7 @@ export const api = {
 
   // SSO Auth
   getLoginUrl: () =>
-    request<{ ok: boolean; login_url: string; client_id: string }>('/api/auth/login-url', { method: 'POST' }),
+    request<{ ok: boolean; login_url: string; client_id: string; fallback?: boolean; upstream_error?: string }>('/api/auth/login-url', { method: 'POST' }),
   pollLoginStatus: (clientId: string) =>
     request<{ ok: boolean; status: string; token?: string; user_id?: string }>(`/api/auth/login-status?client_id=${enc(clientId)}`),
   addAccountFromSSO: (data: { token: string; user_id?: string }) =>
