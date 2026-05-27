@@ -104,19 +104,36 @@ def poll_login_status(client_id: str) -> dict:
     if client_id not in _pending_sessions:
         return {"ok": False, "status": "unknown", "error": "Invalid clientId"}
 
-    try:
-        with httpx.Client(base_url=BASE_URL, timeout=10) as http:
-            resp = http.get(
-                LOGIN_STATUS_ENDPOINT,
-                headers={"Content-Type": "application/json", "clientId": client_id},
-            )
-            data, err = _safe_json(resp)
-            if err:
-                log.warning("Login status poll failed: %s", err)
-                return {"ok": False, "status": "pending", "error": err}
-    except Exception as e:
-        log.warning("Login status poll failed: %s", e)
-        return {"ok": False, "status": "pending", "error": str(e)}
+    data = None
+    last_error = ""
+
+    for attempt in range(2):
+        try:
+            with httpx.Client(base_url=BASE_URL, timeout=10) as http:
+                resp = http.get(
+                    LOGIN_STATUS_ENDPOINT,
+                    headers={"Content-Type": "application/json", "clientId": client_id},
+                )
+                data, err = _safe_json(resp)
+                if err:
+                    last_error = err
+                    data = None  # reset so we know it failed
+                    if attempt == 0:
+                        import time
+                        time.sleep(1)
+                        continue
+                    break
+        except Exception as e:
+            last_error = str(e)
+            data = None
+            if attempt == 0:
+                import time
+                time.sleep(1)
+                continue
+
+    if data is None:
+        log.warning("Login status poll failed after retries: %s", last_error)
+        return {"ok": False, "status": "pending", "error": last_error}
 
     code = str(data.get("resCode", data.get("code", "")))
     if code not in ("0", "200"):

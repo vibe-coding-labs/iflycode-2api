@@ -175,8 +175,10 @@ const Accounts: React.FC = () => {
           description: `已在浏览器中打开 iFlyCode 登录页面，等待登录完成...${fallbackMsg}`,
           duration: 0,
         });
-        // Start polling
+        // Start polling with timeout
         const clientId = result.client_id;
+        let failCount = 0;
+        const maxFails = 15; // 30 seconds of consecutive failures
         const pollTimer = setInterval(async () => {
           try {
             const pollResult = await api.pollLoginStatus(clientId);
@@ -188,11 +190,27 @@ const Accounts: React.FC = () => {
               });
               notification.success({ key, message: 'SSO 登录成功', description: '已自动添加账号', duration: 3 });
               fetchAccounts();
+              return;
             }
+            failCount = 0; // reset on successful poll (even if pending)
           } catch {
-            // keep polling
+            failCount++;
+            if (failCount >= maxFails) {
+              clearInterval(pollTimer);
+              notification.error({
+                key,
+                message: 'SSO 登录超时',
+                description: '轮询登录状态失败，请检查网络后重试，或使用手动粘贴 Token 方式添加账号',
+                duration: 10,
+              });
+            }
           }
         }, 2000);
+        // Auto-stop after 5 minutes
+        setTimeout(() => {
+          clearInterval(pollTimer);
+          notification.destroy(key);
+        }, 5 * 60 * 1000);
       }
     } catch (e: unknown) {
       message.error(e instanceof Error ? e.message : '获取登录地址失败');
