@@ -22,4 +22,4 @@ iflycode-proxy = "iflycode_proxy.cli:cli"
 
 [build-system]
 requires = ["hatchling"]
-build-backend = "hatchling.backends"
+build-backend = "hatchling.build"
