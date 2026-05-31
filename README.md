@@ -9,7 +9,29 @@ pip install -e .
 iflycode-proxy serve
 ```
 
-打开 http://localhost:40420 添加你的讯飞 SSO 账号，搞定。
+打开 http://localhost:40419 添加你的讯飞 SSO 账号，搞定。
+
+
+## 授权状态
+
+> ⚠️ **当前状态：SSO 登录流程已实现，但需有效 Token 才能使用**
+>
+> 星火 API 被 WAF (iflysec Herald) 保护，无 Token 的请求一律返回 502。
+> 需要先完成 SSO 登录拿到 Token 才能调通。
+
+**获取 Token 的方法：**
+
+先在本地电脑 SSH 端口转发到服务器：
+
+```bash
+ssh -L 40419:127.0.0.1:40419 user@your-server
+```
+
+然后浏览器打开 `http://127.0.0.1:40419` → 扫码登录即可。
+
+拿到 Token 后填进管理面板的【添加账号】，即可开始使用。
+
+所有 API 请求都在 Header 里带 `token` 参数认证。
 
 ## 怎么用
 
