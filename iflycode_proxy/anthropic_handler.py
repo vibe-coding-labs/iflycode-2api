@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from iflycode_proxy.credential_router import CredentialRouter
 from iflycode_proxy.proxy_logger import log_request, log_response, log_error
+from iflycode_proxy.truncate import preemptive_truncate
 
 log = logging.getLogger("iflycode-proxy.anthropic")
 
@@ -558,6 +559,12 @@ def create_anthropic_router(cred_router: CredentialRouter) -> APIRouter:
         max_tokens = req_body.get("max_tokens", 4096)
         messages, tools = _translate_messages(req_body)
         has_tools = bool(tools)
+
+        # Proactively truncate long conversations
+        truncation_rounds = preemptive_truncate(messages)
+        if truncation_rounds > 0:
+            log.info("Preemptive truncation performed %d round(s) for account=%s",
+                     truncation_rounds, account_id)
 
         log_request(
             protocol=PROTOCOL, endpoint="/v1/messages",

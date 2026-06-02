@@ -10,6 +10,14 @@ log = logging.getLogger("iflycode-proxy")
 AGENT_VERSION = "3.4.2"
 
 
+def _get_db_and_router():
+    """Load the default database and credential router."""
+    from iflycode_proxy.db import Database
+    db = Database()
+    router = db.get_credential_router()
+    return db, router
+
+
 @click.group()
 @click.option("-v", "--verbose", is_flag=True, help="Enable debug logging")
 @click.pass_context
@@ -90,3 +98,110 @@ def version():
 
 if __name__ == "__main__":
     cli()
+
+
+@cli.command()
+@click.argument("message", nargs=-1, required=True)
+@click.option("-m", "--model", default="iflycode-default", help="Model name")
+@click.option("-s", "--stream", is_flag=True, help="Stream output")
+@click.option("--max-tokens", default=4096, help="Max tokens")
+def chat(message, model, stream, max_tokens):
+    """Send a chat message and print the response."""
+    import json
+    from iflycode_proxy.db import Database
+    from iflycode_proxy.credential_router import CredentialRouter
+
+    db = Database()
+    router = db.get_credential_router()
+    if not router.list_accounts():
+        click.echo("No accounts configured. Add one via the web UI.")
+        return
+
+    client = router.get_client(None)
+    messages = [{"role": "user", "content": " ".join(message)}]
+    body = {"stream": stream}
+    if model:
+        body["modelCode"] = model
+
+    if stream:
+        click.echo("--- streaming response ---")
+        with client.chat_stream(messages, body) as resp:
+            for raw_line in resp.iter_lines():
+                if not raw_line:
+                    continue
+                line = raw_line.decode("utf-8", errors="replace") if isinstance(raw_line, bytes) else raw_line
+                if line.startswith("data:"):
+                    payload = line[5:].strip()
+                    if payload == "[DONE]":
+                        continue
+                    try:
+                        chunk = json.loads(payload)
+                        choices = chunk.get("choices", [])
+                        if choices:
+                            content = choices[0].get("delta", {}).get("content", "")
+                            click.echo(content, nl=False)
+                    except json.JSONDecodeError:
+                        continue
+        click.echo()
+    else:
+        resp = client.chat(messages, body)
+        data = resp.json()
+        choices = data.get("choices", [])
+        if choices:
+            click.echo(choices[0].get("message", {}).get("content", ""))
+        else:
+            click.echo(str(data))
+
+
+@cli.command()
+def models():
+    """List available upstream models."""
+    db, router = _get_db_and_router()
+    accounts = router.list_accounts()
+    if not accounts:
+        click.echo("No accounts configured.")
+        return
+    for acc in accounts:
+        models_data = db.get_account_models(acc["account_id"])
+        if models_data:
+            click.echo(f"Account: {acc['account_id']}")
+            for m in models_data:
+                click.echo(f"  {m.get('modelCode', '?')} — {m.get('modelName', '?')}")
+        else:
+            click.echo(f"Account: {acc['account_id']} — no models available")
+
+
+@cli.command()
+def check():
+    """Validate all account credentials."""
+    db, router = _get_db_and_router()
+    accounts = router.list_accounts()
+    if not accounts:
+        click.echo("No accounts configured.")
+        return
+
+    click.echo(f"Checking {len(accounts)} account(s)...")
+    valid_count = 0
+    for acc in accounts:
+        is_valid = db.validate_account(acc["account_id"])
+        status = "✅ valid" if is_valid else "❌ invalid"
+        click.echo(f"  {acc['account_id']}: {status}")
+        if is_valid:
+            valid_count += 1
+    click.echo(f"\n{valid_count}/{len(accounts)} accounts valid")
+
+
+@cli.command()
+def whoami():
+    """Show the current default account info."""
+    db, router = _get_db_and_router()
+    accounts = router.list_accounts()
+    if not accounts:
+        click.echo("No accounts configured.")
+        return
+    default = db.get_default_account()
+    if default:
+        click.echo(f"Default account: {default.get('account_id', '?')}")
+        click.echo(f"  API Key: {default.get('api_key', '?')[:12]}...")
+        click.echo(f"  User ID: {default.get('user_id', '?')}")
+    click.echo(f"\nTotal accounts: {len(accounts)}")

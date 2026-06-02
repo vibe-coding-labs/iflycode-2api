@@ -191,6 +191,14 @@ export const api = {
   getAccountRecentLogs: (accountId: string, limit: number = 20) =>
     request<{ logs: RecentLogEntry[] }>(`/api/accounts/${enc(accountId)}/recent-logs?limit=${limit}`).then(r => r.logs),
 
+  // Account extra features
+  updateRemark: (accountId: string, remark: string) =>
+    request<{ ok: boolean }>(`/api/accounts/${enc(accountId)}/remark`, { method: 'PUT', body: JSON.stringify({ remark }) }),
+  exportAccounts: () =>
+    request<{ ok: boolean; accounts: Account[]; count: number }>('/api/accounts-export', { method: 'POST' }),
+  importAccounts: (accounts: Account[]) =>
+    request<{ ok: boolean; added: number; updated: number; total: number }>('/api/accounts-import', { method: 'POST', body: JSON.stringify({ accounts }) }),
+
   // Stats
   getStats: () => request<Stats>('/api/stats'),
   getLogs: (limit: number = 100, filters?: { api_key?: string; model?: string; status?: number }) => {
