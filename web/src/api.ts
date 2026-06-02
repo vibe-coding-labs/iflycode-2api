@@ -4,6 +4,8 @@ export interface Account {
   user_id: string;
   is_default: boolean;
   default_model: string;
+  remark?: string;
+  display_order?: number;
   created_at?: string;
   credential_valid: number; // -1=unknown, 0=expired, 1=valid
   credential_error: string;
@@ -200,6 +202,8 @@ export const api = {
     request<{ ok: boolean; added: number; updated: number; total: number }>('/api/accounts-import', { method: 'POST', body: JSON.stringify({ accounts }) }),
   getGitHubStars: () =>
     request<{ stars: number }>('/api/github-stars').then(r => r.stars),
+  reorderAccounts: (accountIds: string[]) =>
+    request<{ ok: boolean }>('/api/accounts/reorder', { method: 'PUT', body: JSON.stringify({ account_ids: accountIds }) }),
 
   // Stats
   getStats: () => request<Stats>('/api/stats'),

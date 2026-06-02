@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     is_default INTEGER NOT NULL DEFAULT 0,
     default_model TEXT NOT NULL DEFAULT '',
     remark TEXT NOT NULL DEFAULT '',
+    display_order INTEGER NOT NULL DEFAULT 0,
     credential_valid INTEGER DEFAULT -1,
     credential_error TEXT DEFAULT '',
     credential_refreshed_at TEXT DEFAULT '',
@@ -97,6 +98,11 @@ class Database:
                 ALTER TABLE accounts ADD COLUMN remark TEXT DEFAULT '';
             """)
             log.info("Migration: added remark column to accounts")
+        if "display_order" not in cols:
+            conn.executescript("""
+                ALTER TABLE accounts ADD COLUMN display_order INTEGER DEFAULT 0;
+            """)
+            log.info("Migration: added display_order column to accounts")
 
     def _migrate_account_pk(self, conn):
         """Migrate old schema (api_key as PK) to new schema (account_id as PK)."""
@@ -134,16 +140,16 @@ class Database:
     # -- Account CRUD --
 
     def add_account(self, account_id: str, api_key: str, spark_token: str, user_id: str,
-                    is_default: bool = False, default_model: str = "", remark: str = ""):
+                    is_default: bool = False, default_model: str = "", remark: str = "", display_order: int = 0):
         from iflycode_proxy.crypto import encrypt
         conn = self._get_conn()
         if is_default:
             conn.execute("UPDATE accounts SET is_default = 0")
         encrypted_token = encrypt(spark_token)
         conn.execute(
-            "INSERT OR REPLACE INTO accounts (account_id, api_key, spark_token, user_id, is_default, default_model, remark, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-            (account_id, api_key, encrypted_token, user_id, 1 if is_default else 0, default_model, remark),
+            "INSERT OR REPLACE INTO accounts (account_id, api_key, spark_token, user_id, is_default, default_model, remark, display_order, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+            (account_id, api_key, encrypted_token, user_id, 1 if is_default else 0, default_model, remark, display_order),
         )
         conn.commit()
         log.info("Account saved: account_id=%s api_key=%s user_id=%s", account_id, api_key[:8] + "...", user_id)
@@ -179,11 +185,11 @@ class Database:
     def list_accounts(self) -> List[Dict[str, Any]]:
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT account_id, api_key, user_id, is_default, default_model, remark, created_at, "
+            "SELECT account_id, api_key, user_id, is_default, default_model, remark, display_order, created_at, "
             "  COALESCE(credential_valid, -1) as credential_valid, "
             "  COALESCE(credential_error, '') as credential_error, "
             "  COALESCE(credential_refreshed_at, '') as credential_refreshed_at "
-            "FROM accounts ORDER BY created_at"
+            "FROM accounts ORDER BY display_order, created_at"
         ).fetchall()
         return [
             {
@@ -193,6 +199,7 @@ class Database:
                 "is_default": bool(r["is_default"]),
                 "default_model": r["default_model"] or "",
                 "remark": r["remark"] or "",
+                "display_order": r["display_order"] if "display_order" in r.keys() else 0,
                 "created_at": r["created_at"],
                 "credential_valid": r["credential_valid"],
                 "credential_error": r["credential_error"],
@@ -268,6 +275,17 @@ class Database:
                 remark=acc.get("remark", ""),
             )
         return {"added": added, "updated": updated, "total": len(account_list)}
+
+    def reorder_accounts(self, account_ids: List[str]):
+        """Update display_order for accounts based on list ordering."""
+        conn = self._get_conn()
+        for i, aid in enumerate(account_ids):
+            conn.execute(
+                "UPDATE accounts SET display_order = ?, updated_at = datetime('now') WHERE account_id = ?",
+                (i + 1, aid),
+            )
+        conn.commit()
+        log.info("Reordered %d accounts", len(account_ids))
 
     # -- Account lookup --
 

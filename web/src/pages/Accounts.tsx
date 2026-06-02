@@ -9,7 +9,7 @@ import {
   SafetyCertificateOutlined, ReloadOutlined, LoginOutlined,
   CheckCircleOutlined, LoadingOutlined, CopyOutlined,
   CloseCircleOutlined, QuestionCircleOutlined, PlusOutlined,
-  DownloadOutlined, UploadOutlined,
+  DownloadOutlined, UploadOutlined, ArrowUpOutlined, ArrowDownOutlined,
 } from '@ant-design/icons';
 import { AnthropicIcon, OpenAIIcon } from '../components/BrandIcons';
 import { api } from '../api';
@@ -96,6 +96,7 @@ const Accounts: React.FC = () => {
   const [ssoLoading, setSsoLoading] = useState(false);
   const [editRemark, setEditRemark] = useState<string | null>(null);
   const [remarkValue, setRemarkValue] = useState('');
+  const [reordering, setReordering] = useState(false);
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -274,7 +275,42 @@ const Accounts: React.FC = () => {
     }
   };
 
+  const moveAccount = (index: number, direction: 'up' | 'down') => {
+    const newList = [...accounts];
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= newList.length) return;
+    [newList[index], newList[target]] = [newList[target], newList[index]];
+    setAccounts(newList);
+    setReordering(true);
+  };
+
+  const saveOrder = async () => {
+    try {
+      await api.reorderAccounts(accounts.map(a => a.account_id));
+      message.success('排序已保存');
+      setReordering(false);
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : '保存排序失败');
+      fetchAccounts();
+    }
+  };
+
   const columns = [
+    {
+      title: '排序',
+      key: 'sort',
+      width: 60,
+      render: (_: unknown, record: Account, index: number) => (
+        <Space size={0}>
+          <Button size="small" type="text" icon={<ArrowUpOutlined />}
+            disabled={index === 0}
+            onClick={(e) => { e.stopPropagation(); moveAccount(index, 'up'); }} />
+          <Button size="small" type="text" icon={<ArrowDownOutlined />}
+            disabled={index === accounts.length - 1}
+            onClick={(e) => { e.stopPropagation(); moveAccount(index, 'down'); }} />
+        </Space>
+      ),
+    },
     {
       title: '账号',
       key: 'account_id',
@@ -411,6 +447,11 @@ const Accounts: React.FC = () => {
         <Button icon={<UploadOutlined />} onClick={handleImport}>
           导入账号
         </Button>
+        {reordering && (
+          <Button type="primary" onClick={saveOrder}>
+            保存排序
+          </Button>
+        )}
       </Space>
 
       <Table

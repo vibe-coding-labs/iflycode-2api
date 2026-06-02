@@ -191,6 +191,16 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
         result = db.import_accounts(account_list)
         return {"ok": True, **result}
 
+    @router.put("/accounts/reorder")
+    async def reorder_accounts(request: Request):
+        """Reorder accounts by providing ordered list of account_ids."""
+        body = await request.json()
+        account_ids = body.get("account_ids", [])
+        if not account_ids:
+            raise HTTPException(400, "account_ids list is required")
+        db.reorder_accounts(account_ids)
+        return {"ok": True}
+
     # -- SSO Auth --
 
     @router.post("/auth/login-url")
@@ -278,12 +288,17 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
         db.set_setting("auth_jwt_secret", new_secret)
         return {"ok": True, "message": "Password changed. Please re-login."}
 
-    # -- Web Search (stub, requires upstream search API) --
+    # -- Web Search --
 
     @router.post("/v1/web-search")
     async def web_search(request: Request):
-        """Web search endpoint (currently unavailable for iFlyCode)."""
-        return {"search_result": [], "note": "Web search is not available for iFlyCode upstream"}
+        """Web search endpoint (currently unavailable for iFlyCode upstream)."""
+        return {"search_result": [], "note": "Web search requires upstream search API support"}
+
+    @router.post("/v1/rerank")
+    async def rerank(request: Request):
+        """Document reranking endpoint (currently unavailable for iFlyCode upstream)."""
+        return {"result": [], "note": "Reranking requires upstream rerank API support"}
 
     @router.post("/api/auth/change-password")
     async def api_change_password(request: Request):
