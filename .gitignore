@@ -11,3 +11,5 @@ build/
 web/dist/
 iflycode_proxy/static/
 web/tsconfig.tsbuildinfo
+.claude/
+
