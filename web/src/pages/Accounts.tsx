@@ -9,6 +9,7 @@ import {
   SafetyCertificateOutlined, ReloadOutlined, LoginOutlined,
   CheckCircleOutlined, LoadingOutlined, CopyOutlined,
   CloseCircleOutlined, QuestionCircleOutlined, PlusOutlined,
+  DownloadOutlined, UploadOutlined,
 } from '@ant-design/icons';
 import { AnthropicIcon, OpenAIIcon } from '../components/BrandIcons';
 import { api } from '../api';
@@ -93,6 +94,8 @@ const Accounts: React.FC = () => {
 
   // SSO login state
   const [ssoLoading, setSsoLoading] = useState(false);
+  const [editRemark, setEditRemark] = useState<string | null>(null);
+  const [remarkValue, setRemarkValue] = useState('');
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -219,6 +222,58 @@ const Accounts: React.FC = () => {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      const result = await api.exportAccounts();
+      const blob = new Blob([JSON.stringify({ accounts: result.accounts, exported_at: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `iflycode-accounts-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      message.success(`已导出 ${result.count} 个账号`);
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : '导出失败');
+    }
+  };
+
+  const handleImport = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const list = data.accounts || [];
+        if (!Array.isArray(list) || list.length === 0) {
+          message.error('文件中没有找到账号数据');
+          return;
+        }
+        const result = await api.importAccounts(list);
+        message.success(`导入完成：新增 ${result.added}，更新 ${result.updated}，共 ${result.total}`);
+        fetchAccounts();
+      } catch (e: unknown) {
+        message.error(e instanceof Error ? e.message : '导入失败');
+      }
+    };
+    input.click();
+  };
+
+  const handleUpdateRemark = async (accountId: string) => {
+    try {
+      await api.updateRemark(accountId, remarkValue);
+      message.success('备注已更新');
+      setEditRemark(null);
+      fetchAccounts();
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : '更新备注失败');
+    }
+  };
+
   const columns = [
     {
       title: '账号',
@@ -229,6 +284,7 @@ const Accounts: React.FC = () => {
             {record.account_id}
           </Typography.Text>
           {record.is_default && <Tag color="blue"><StarOutlined /> 默认</Tag>}
+          {record.remark && <Tag color="orange">{record.remark}</Tag>}
         </Space>
       ),
     },
@@ -348,6 +404,12 @@ const Accounts: React.FC = () => {
         </Button>
         <Button icon={<PlusOutlined />} onClick={() => { setManualModalOpen(true); }}>
           手动粘贴 Token
+        </Button>
+        <Button icon={<DownloadOutlined />} onClick={handleExport}>
+          导出账号
+        </Button>
+        <Button icon={<UploadOutlined />} onClick={handleImport}>
+          导入账号
         </Button>
       </Space>
 
