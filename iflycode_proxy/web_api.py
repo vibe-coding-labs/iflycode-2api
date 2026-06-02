@@ -6,6 +6,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException, Request
 
 from iflycode_proxy.auth import get_login_url, poll_login_status
+from iflycode_proxy.auth_middleware import hash_password, check_password, generate_token, _jwt_secret
 from iflycode_proxy.db import Database, _generate_account_id, _generate_api_key
 from iflycode_proxy.sessions import get_active_sessions, get_all_active_counts, session_stats
 
@@ -193,6 +194,45 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
         is_default = body.get("is_default", False)
         db.add_account(account_id, api_key, token, user_id, is_default=is_default)
         return {"ok": True, "account_id": account_id, "api_key": api_key}
+
+    # -- Auth (password/JWT login) --
+
+    @router.get("/auth/status")
+    async def auth_status():
+        """Return whether the proxy has been initialized with a password."""
+        password_hash = db.get_setting("auth_password_hash")
+        return {"initialized": bool(password_hash), "auth_enabled": bool(password_hash)}
+
+    @router.post("/auth/init")
+    async def auth_init(request: Request):
+        """Initialize the proxy with a root password (one-time setup)."""
+        if db.get_setting("auth_password_hash"):
+            raise HTTPException(400, "Already initialized")
+        body = await request.json()
+        password = body.get("password", "")
+        if len(password) < 6:
+            raise HTTPException(400, "Password must be at least 6 characters")
+        hashed = hash_password(password)
+        secret = _jwt_secret()
+        db.set_setting("auth_password_hash", hashed)
+        db.set_setting("auth_jwt_secret", secret)
+        token = generate_token("root", secret)
+        log.info("Auth initialized with password hash")
+        return {"ok": True, "token": token}
+
+    @router.post("/auth/login")
+    async def auth_login(request: Request):
+        """Authenticate with root password and receive a JWT token."""
+        password_hash = db.get_setting("auth_password_hash")
+        jwt_secret = db.get_setting("auth_jwt_secret")
+        if not password_hash or not jwt_secret:
+            raise HTTPException(400, "Not initialized. Visit /setup first.")
+        body = await request.json()
+        password = body.get("password", "")
+        if not check_password(password, password_hash):
+            raise HTTPException(401, "Invalid password")
+        token = generate_token("root", jwt_secret)
+        return {"ok": True, "token": token}
 
     # -- Settings --
 

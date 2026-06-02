@@ -16,6 +16,9 @@ from iflycode_proxy.openai_handler import create_openai_router
 from iflycode_proxy.anthropic_handler import create_anthropic_router
 from iflycode_proxy.sessions import session_stats
 
+# Will be imported conditionally to avoid circular dependency
+_auth_middleware_added = False
+
 log = logging.getLogger("iflycode-proxy")
 
 _janitor_task: Optional[object] = None
@@ -66,6 +69,10 @@ def create_app(router: CredentialRouter, db=None):
     app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     if db:
+        # Add auth middleware to protect /api/* endpoints
+        from iflycode_proxy.auth_middleware import AuthMiddleware
+        app.add_middleware(AuthMiddleware, db=db)
+
         @app.middleware("http")
         async def log_requests(request: Request, call_next):
             start = time.time()

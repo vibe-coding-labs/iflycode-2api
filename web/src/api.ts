@@ -97,7 +97,47 @@ export interface LogEntry {
   created_at: string;
 }
 
+const TOKEN_KEY = 'iflycode_jwt';
+
+function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export function isAuthenticated(): boolean {
+  return !!getToken();
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = getToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const resp = await fetch(path, {
+    headers,
+    ...options,
+  });
+  if (resp.status === 401) {
+    clearToken();
+    window.location.href = '/login';
+    throw new Error('Unauthorized');
+  }
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+    throw new Error(err.detail || `HTTP ${resp.status}`);
+  }
+  return resp.json();
+}
+
+async function authRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const resp = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
@@ -108,6 +148,20 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
   return resp.json();
 }
+
+export const authApi = {
+  status: () => authRequest<{ initialized: boolean; auth_enabled: boolean }>('/api/auth/status'),
+  init: (password: string) =>
+    authRequest<{ ok: boolean; token: string }>('/api/auth/init', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+  login: (password: string) =>
+    authRequest<{ ok: boolean; token: string }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+};
 
 function enc(s: string) {
   return encodeURIComponent(s);
