@@ -167,6 +167,30 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
             raise HTTPException(404, f"Account '{account_id}' not found")
         return {"ok": True, "account_id": account_id, "api_key": new_key}
 
+    @router.put("/accounts/{account_id}/remark")
+    async def update_account_remark(account_id: str, request: Request):
+        """Update the remark/alias for an account."""
+        body = await request.json()
+        remark = body.get("remark", "").strip()
+        db.update_account_remark(account_id, remark)
+        return {"ok": True, "account_id": account_id, "remark": remark}
+
+    @router.post("/accounts-export")
+    async def export_accounts():
+        """Export all accounts with decrypted credentials."""
+        accounts = db.export_accounts()
+        # Strip spark_token from response for security
+        safe = [{k: v for k, v in a.items() if k != "spark_token"} for a in accounts]
+        return {"ok": True, "accounts": safe, "count": len(safe)}
+
+    @router.post("/accounts-import")
+    async def import_accounts(request: Request):
+        """Import accounts from exported data."""
+        body = await request.json()
+        account_list = body.get("accounts", [])
+        result = db.import_accounts(account_list)
+        return {"ok": True, **result}
+
     # -- SSO Auth --
 
     @router.post("/auth/login-url")

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     user_id TEXT NOT NULL DEFAULT '',
     is_default INTEGER NOT NULL DEFAULT 0,
     default_model TEXT NOT NULL DEFAULT '',
+    remark TEXT NOT NULL DEFAULT '',
     credential_valid INTEGER DEFAULT -1,
     credential_error TEXT DEFAULT '',
     credential_refreshed_at TEXT DEFAULT '',
@@ -88,8 +89,14 @@ class Database:
                 ALTER TABLE accounts ADD COLUMN credential_valid INTEGER DEFAULT -1;
                 ALTER TABLE accounts ADD COLUMN credential_error TEXT DEFAULT '';
                 ALTER TABLE accounts ADD COLUMN credential_refreshed_at TEXT DEFAULT '';
+                ALTER TABLE accounts ADD COLUMN remark TEXT DEFAULT '';
             """)
-            log.info("Migration: added credential_status columns to accounts")
+            log.info("Migration: added credential_status and remark columns to accounts")
+        elif "remark" not in cols:
+            conn.executescript("""
+                ALTER TABLE accounts ADD COLUMN remark TEXT DEFAULT '';
+            """)
+            log.info("Migration: added remark column to accounts")
 
     def _migrate_account_pk(self, conn):
         """Migrate old schema (api_key as PK) to new schema (account_id as PK)."""
@@ -127,16 +134,16 @@ class Database:
     # -- Account CRUD --
 
     def add_account(self, account_id: str, api_key: str, spark_token: str, user_id: str,
-                    is_default: bool = False, default_model: str = ""):
+                    is_default: bool = False, default_model: str = "", remark: str = ""):
         from iflycode_proxy.crypto import encrypt
         conn = self._get_conn()
         if is_default:
             conn.execute("UPDATE accounts SET is_default = 0")
         encrypted_token = encrypt(spark_token)
         conn.execute(
-            "INSERT OR REPLACE INTO accounts (account_id, api_key, spark_token, user_id, is_default, default_model, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
-            (account_id, api_key, encrypted_token, user_id, 1 if is_default else 0, default_model),
+            "INSERT OR REPLACE INTO accounts (account_id, api_key, spark_token, user_id, is_default, default_model, remark, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+            (account_id, api_key, encrypted_token, user_id, 1 if is_default else 0, default_model, remark),
         )
         conn.commit()
         log.info("Account saved: account_id=%s api_key=%s user_id=%s", account_id, api_key[:8] + "...", user_id)
@@ -172,7 +179,7 @@ class Database:
     def list_accounts(self) -> List[Dict[str, Any]]:
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT account_id, api_key, user_id, is_default, default_model, created_at, "
+            "SELECT account_id, api_key, user_id, is_default, default_model, remark, created_at, "
             "  COALESCE(credential_valid, -1) as credential_valid, "
             "  COALESCE(credential_error, '') as credential_error, "
             "  COALESCE(credential_refreshed_at, '') as credential_refreshed_at "
@@ -185,6 +192,7 @@ class Database:
                 "user_id": r["user_id"],
                 "is_default": bool(r["is_default"]),
                 "default_model": r["default_model"] or "",
+                "remark": r["remark"] or "",
                 "created_at": r["created_at"],
                 "credential_valid": r["credential_valid"],
                 "credential_error": r["credential_error"],
@@ -214,11 +222,60 @@ class Database:
             "default_model": row["default_model"] or "",
         }
 
+    def update_account_remark(self, account_id: str, remark: str):
+        conn = self._get_conn()
+        conn.execute(
+            "UPDATE accounts SET remark = ?, updated_at = datetime('now') WHERE account_id = ?",
+            (remark, account_id),
+        )
+        conn.commit()
+
+    def export_accounts(self) -> List[Dict[str, Any]]:
+        """Export all accounts with decrypted tokens for backup/transfer."""
+        accounts = self.list_accounts()
+        result = []
+        for acc in accounts:
+            full = self.get_account(acc["account_id"])
+            if full:
+                result.append({
+                    "account_id": full["account_id"],
+                    "api_key": full["api_key"],
+                    "spark_token": full["spark_token"],
+                    "user_id": full["user_id"],
+                    "is_default": full["is_default"],
+                    "default_model": full["default_model"],
+                    "remark": full["remark"],
+                })
+        return result
+
+    def import_accounts(self, account_list: List[Dict[str, Any]]) -> dict:
+        """Import accounts from exported JSON. Returns {added, updated, total}."""
+        added = 0
+        updated = 0
+        for acc in account_list:
+            existing = self.get_account(acc.get("account_id", ""))
+            if existing:
+                updated += 1
+            else:
+                added += 1
+            self.add_account(
+                acc.get("account_id", _generate_account_id()),
+                acc.get("api_key", _generate_api_key()),
+                acc.get("spark_token", ""),
+                acc.get("user_id", ""),
+                is_default=acc.get("is_default", False),
+                default_model=acc.get("default_model", ""),
+                remark=acc.get("remark", ""),
+            )
+        return {"added": added, "updated": updated, "total": len(account_list)}
+
+    # -- Account lookup --
+
     def get_account_by_api_key(self, api_key: str) -> Optional[Dict[str, Any]]:
         from iflycode_proxy.crypto import decrypt, is_encrypted
         conn = self._get_conn()
         row = conn.execute(
-            "SELECT account_id, api_key, spark_token, user_id, is_default, default_model FROM accounts WHERE api_key = ?",
+            "SELECT account_id, api_key, spark_token, user_id, is_default, default_model, remark FROM accounts WHERE api_key = ?",
             (api_key,),
         ).fetchone()
         if not row:
@@ -233,6 +290,7 @@ class Database:
             "user_id": row["user_id"],
             "is_default": bool(row["is_default"]),
             "default_model": row["default_model"] or "",
+            "remark": row["remark"] if "remark" in row.keys() else "",
         }
 
     def get_default_account(self) -> Optional[Dict[str, Any]]:
