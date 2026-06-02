@@ -79,6 +79,9 @@ class Database:
         cols = [r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()]
         if "account_id" not in cols:
             self._migrate_account_pk(conn)
+            # Re-read columns — _migrate_account_pk drops and recreates the table
+            # with the full new schema including credential columns
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(accounts)").fetchall()]
         # Migration 2: credential_valid, credential_error, credential_refreshed_at
         if "credential_valid" not in cols:
             conn.executescript("""

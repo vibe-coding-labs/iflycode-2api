@@ -166,8 +166,8 @@ class TestAccountCRUD:
         stored = row["spark_token"]
         # Should NOT be plaintext
         assert stored != "plaintext-secret"
-        # Should have the encryption prefix
-        assert stored.startswith("enc:")
+        # Should have the encryption prefix (current: aes:, legacy: enc:)
+        assert stored.startswith("aes:") or stored.startswith("enc:"), f"Expected encrypted prefix, got: {stored[:20]}"
 
     def test_get_nonexistent_account(self, db):
         assert db.get_account("acc-nope") is None
