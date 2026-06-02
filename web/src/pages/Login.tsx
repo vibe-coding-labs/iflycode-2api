@@ -1,14 +1,19 @@
-import React, { useState } from 'react';
-import { Form, Input, Button, Card, message, Typography } from 'antd';
-import { LockOutlined, UserOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
-import { authApi, setToken } from '../api';
+import React, { useEffect, useState } from 'react';
+import { Form, Input, Button, Card, message, Typography, Tooltip } from 'antd';
+import { LockOutlined, UserOutlined, GithubOutlined, StarFilled } from '@ant-design/icons';
+import { useNavigate, Link } from 'react-router-dom';
+import { authApi, setToken, api } from '../api';
 
 const { Title, Text } = Typography;
 
 const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
+  const [stars, setStars] = useState<number | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api.getGitHubStars().then(setStars).catch(() => {});
+  }, []);
 
   const handleSubmit = async (values: { password: string }) => {
     setLoading(true);
@@ -31,7 +36,38 @@ const LoginPage: React.FC = () => {
       alignItems: 'center',
       justifyContent: 'center',
       background: 'linear-gradient(135deg, #389e0d 0%, #237804 100%)',
+      position: 'relative',
     }}>
+      <Tooltip title="去 GitHub Star 支持我们">
+        <a
+          href="https://github.com/vibe-coding-labs/iflycode-proxy"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            position: 'absolute',
+            top: 20,
+            right: 24,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            color: 'rgba(255,255,255,0.85)',
+            fontSize: 13,
+            textDecoration: 'none',
+            transition: 'color 0.2s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.85)')}
+        >
+          <GithubOutlined style={{ fontSize: 18 }} />
+          GitHub
+          {stars !== null && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 2 }}>
+              <StarFilled style={{ fontSize: 13, color: '#faad14' }} />
+              <span style={{ fontSize: 12 }}>{stars.toLocaleString()}</span>
+            </span>
+          )}
+        </a>
+      </Tooltip>
       <Card
         style={{ width: 400, borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}
         styles={{ body: { padding: 32 } }}

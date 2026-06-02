@@ -32,11 +32,24 @@ def cli(ctx, verbose: bool):
 @click.option("-H", "--host", default="0.0.0.0", help="Bind host")
 @click.option("-p", "--port", default=40419, help="Bind port")
 @click.option("--service", is_flag=True, help="Run as daemon (auto-restart on crash)")
+@click.option("--tls", is_flag=True, help="Enable HTTPS with self-signed cert")
+@click.option("--tls-cert", default="", help="Path to TLS cert file")
+@click.option("--tls-key", default="", help="Path to TLS key file")
 @click.pass_context
-def serve(ctx, host: str, port: int, service: bool):
+def serve(ctx, host: str, port: int, service: bool, tls: bool, tls_cert: str, tls_key: str):
     import uvicorn
     from iflycode_proxy.db import Database
     from iflycode_proxy.server import create_app
+
+    ssl_certfile = None
+    ssl_keyfile = None
+
+    if tls:
+        if tls_cert and tls_key:
+            ssl_certfile = tls_cert
+            ssl_keyfile = tls_key
+        else:
+            ssl_certfile, ssl_keyfile = _ensure_tls()
 
     if service:
         from iflycode_proxy.daemon import run_supervisor
@@ -67,7 +80,8 @@ def serve(ctx, host: str, port: int, service: bool):
     click.echo(f"    GET  /api/accounts         — Account management\n")
 
     log_level = "debug" if ctx.obj.get("verbose") else "info"
-    uvicorn.run(app, host=host, port=port, log_level=log_level)
+    uvicorn.run(app, host=host, port=port, log_level=log_level,
+                ssl_certfile=ssl_certfile, ssl_keyfile=ssl_keyfile)
 
 
 @cli.command("stop-service")
@@ -98,6 +112,56 @@ def version():
 
 if __name__ == "__main__":
     cli()
+
+
+def _ensure_tls():
+    """Generate or load self-signed TLS certificate.
+    Reference: JoyCodeProxy cmd/JoyCodeProxy/tls.go
+    """
+    import os
+    from pathlib import Path
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
+    import datetime
+
+    data_dir = Path.home() / ".iflycode-proxy"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    cert_file = data_dir / "cert.pem"
+    key_file = data_dir / "key.pem"
+
+    if cert_file.exists() and key_file.exists():
+        return str(cert_file), str(key_file)
+
+    # Generate self-signed cert
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, "iFlyCode Proxy"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "iFlyCode Proxy"),
+    ])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.utcnow())
+        .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=365))
+        .add_extension(x509.SubjectAlternativeName([
+            x509.DNSName("localhost"),
+            x509.DNSName(os.uname().nodename),
+        ]), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+
+    cert_file.write_bytes(cert.public_bytes(Encoding.PEM))
+    key_file.write_bytes(key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption()))
+    key_file.chmod(0o600)
+
+    log.info("Generated self-signed TLS cert at %s", cert_file)
+    return str(cert_file), str(key_file)
 
 
 @cli.command()
@@ -205,3 +269,30 @@ def whoami():
         click.echo(f"  API Key: {default.get('api_key', '?')[:12]}...")
         click.echo(f"  User ID: {default.get('user_id', '?')}")
     click.echo(f"\nTotal accounts: {len(accounts)}")
+
+
+@cli.command()
+@click.option("-p", "--password", default="", help="New password (omit for interactive prompt)")
+def reset_password(password):
+    """Reset the management panel password."""
+    from iflycode_proxy.db import Database
+    from iflycode_proxy.auth_middleware import hash_password, _jwt_secret
+
+    db = Database()
+
+    if not password:
+        import getpass
+        password = getpass.getpass("New password: ")
+        confirm = getpass.getpass("Confirm password: ")
+        if password != confirm:
+            click.echo("Error: passwords do not match", err=True)
+            return
+    if len(password) < 6:
+        click.echo("Error: password must be at least 6 characters", err=True)
+        return
+
+    hashed = hash_password(password)
+    secret = _jwt_secret()
+    db.set_setting("auth_password_hash", hashed)
+    db.set_setting("auth_jwt_secret", secret)
+    click.echo("Password reset successfully. All existing sessions have been invalidated.")

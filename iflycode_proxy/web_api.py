@@ -258,6 +258,49 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
         token = generate_token("root", jwt_secret)
         return {"ok": True, "token": token}
 
+    @router.post("/auth/change-password")
+    async def auth_change_password(request: Request):
+        """Change the root password (requires old password)."""
+        password_hash = db.get_setting("auth_password_hash")
+        jwt_secret = db.get_setting("auth_jwt_secret")
+        if not password_hash or not jwt_secret:
+            raise HTTPException(400, "Not initialized")
+        body = await request.json()
+        old = body.get("old_password", "")
+        new_pw = body.get("new_password", "")
+        if not check_password(old, password_hash):
+            raise HTTPException(401, "Invalid current password")
+        if len(new_pw) < 6:
+            raise HTTPException(400, "New password must be at least 6 characters")
+        hashed = hash_password(new_pw)
+        new_secret = _jwt_secret()
+        db.set_setting("auth_password_hash", hashed)
+        db.set_setting("auth_jwt_secret", new_secret)
+        return {"ok": True, "message": "Password changed. Please re-login."}
+
+    # -- Web Search (stub, requires upstream search API) --
+
+    @router.post("/v1/web-search")
+    async def web_search(request: Request):
+        """Web search endpoint (currently unavailable for iFlyCode)."""
+        return {"search_result": [], "note": "Web search is not available for iFlyCode upstream"}
+
+    @router.post("/api/auth/change-password")
+    async def api_change_password(request: Request):
+        return await auth_change_password(request)
+
+    @router.get("/api/github-stars")
+    async def github_stars():
+        """Return the project's GitHub star count."""
+        try:
+            import httpx
+            resp = httpx.get("https://api.github.com/repos/vibe-coding-labs/iflycode-proxy", timeout=5)
+            data = resp.json()
+            stars = data.get("stargazers_count", 0)
+            return {"stars": stars}
+        except Exception:
+            return {"stars": 0}
+
     # -- Settings --
 
     @router.get("/settings")

@@ -198,6 +198,8 @@ export const api = {
     request<{ ok: boolean; accounts: Account[]; count: number }>('/api/accounts-export', { method: 'POST' }),
   importAccounts: (accounts: Account[]) =>
     request<{ ok: boolean; added: number; updated: number; total: number }>('/api/accounts-import', { method: 'POST', body: JSON.stringify({ accounts }) }),
+  getGitHubStars: () =>
+    request<{ stars: number }>('/api/github-stars').then(r => r.stars),
 
   // Stats
   getStats: () => request<Stats>('/api/stats'),
