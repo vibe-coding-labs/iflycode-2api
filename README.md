@@ -2,26 +2,64 @@
 
 把讯飞星火飞码变成 OpenAI API，这样 Claude Code、Codex 这些工具就能直接用了。
 
-## ⚠️ 当前已知问题 — WAF 阻断
+> **⚠️ 项目状态：上游服务已停服**
+>
+> 2026-06-10 经过全面排查，确认 iFlyCode 后端服务已彻底停服。详见[项目终止说明](#-上游服务已停服)。
 
-**截止 2026-06-02，所有从该服务器发往 `iflycode-xfsaas.xfyun.cn` 的请求均被 `iflysec Herald` WAF 拦截，返回 502。**
+---
 
-| 测试方式 | 结果 |
-|---------|------|
-| curl 直连（Content-Type / token header 齐全） | 502 (Herald WAF) |
-| Python httpx 客户端（本代理底层 HTTP 库） | 502 (Herald WAF) |
-| 绑真实 IP `124.243.239.178` 绕过代理 | 502 (Herald WAF) |
-| 走第三方代理/日本节点出去 | 502 (Herald WAF) |
-| **官方 Agent 3.4.2 二进制直接启动** | **502 (Herald WAF)** |
+## ⚠️ 上游服务已停服
 
-**不清楚为什么官方插件在用户电脑上能用而本代理调不通。** 有以下可能性（未验证）：
-- 官方 Agent 通过内网/专线访问，不走公网 WAF
-- WAF 放行了特定网络环境（如企业办公网），本服务器不在白名单内
-- API 有一定程度的请求指纹校验（header、TLS handshake 等），本代理没有完全伪造一致
+### TL;DR
 
-以上可能性均为猜测，未在干净的普通网络环境下验证过。
+**iFlyCode 云端服务已停服，该项目已无法继续使用。**
 
-**如果你有一台直连公网（无 Clash/VPN/Docker 等网络干涉）的机器，部署后从本地浏览器 SSO 登录，试试能不能通。如果能通请提 Issue 告知环境。**
+### 详细说明
+
+#### 背景
+
+本项目是一个协议翻译代理，将 OpenAI/Anthropic API 格式的请求翻译为讯飞星火飞码（iFlyCode）的上游 API，让 Claude Code、Codex 等 AI 编程工具能够使用星火飞码的 AI 能力。
+
+项目的核心依赖是 `iflycode-xfsaas.xfyun.cn` 这个上游 API 端点 —— 它在之前的某个时间点开始无法连接，导致项目被搁置。
+
+#### 2026-06-10 全面排查结果
+
+经过对多个角度的系统性测试，结果如下：
+
+| 测试方式 | 绕过手段 | 结果 |
+|---------|---------|------|
+| 默认网络（经 Clash 日本节点代理回国） | — | **502 Bad Gateway** |
+| DIRECT 直连（不走代理） | `--noproxy '*'` | **502 Bad Gateway** |
+| 真实 IP 直连（绕过 Clash TUN 和 fake-ip DNS） | `--resolve` 绕过全部本机代理栈 | **502 Bad Gateway** |
+| Python httpx 原生客户端 | 不走系统代理 | **502 Bad Gateway** |
+| 真实 IP 直连 `iflycode.xfyun.cn` 主站 | `--resolve 180.163.145.11` | **502 Bad Gateway** |
+| 真实 IP 直连 `iflycode-xfsaas.xfyun.cn` API | `--resolve 124.243.239.178` | **502 Bad Gateway** |
+| **对照：`www.xfyun.cn`（讯飞开放平台主站）** | 正常访问 | **200 OK ✅** |
+
+#### 结论
+
+```
+请求 → 阿里云CDN ✓ → TLS握手 ✓ → 阿里云WAF ✓ → Tengine网关 ✓
+  → 转发到iFlyCode后端源站 → ✗ 源站服务器无响应 → 返回502
+```
+
+**不是本机环境/Clash代理的问题**，我们用 `--resolve` 完全绕过了本机全部网络栈（Clash TUN + fake-ip DNS + 代理配置），直连讯飞域名背后的阿里云CDN真实IP（`124.243.239.178` 和 `180.163.145.1x`），结果一样是 502。
+
+**不是 WAF 拦截的问题**，因为 502 页面是 `Tengine` 返回的（CDN网关），错误页明确写的是"您当前访问的网站无法响应"——CDN能连上但**后端源站没有响应**。
+
+**是 iFlyCode 的后端服务已经彻底下线/停服了。** 对比：
+- `www.xfyun.cn` 正常工作 ✅
+- 所有 `iflycode-*` 子域名全部 502 ❌
+
+#### 对之前猜测的修正
+
+之前 README 猜测"WAF 拦截了请求"，这次深入排查后排除了这个可能——WAF 不会返回 502 错误页面，而且正常劫持请求后 WAF 放行到后端源站这一步才超时。是讯飞那边的 iFlyCode 服务本身没有再运行了。
+
+#### 项目现状
+
+- **此 proxy 已无法正常工作**，因为上游 API 端点已不可用
+- 代码库保留作为参考实现和逆向分析成果存档
+- 相关逆向分析资料见 [iflycode-RE](https://github.com/vibe-coding-labs/iflycode-RE) 项目
 
 ---
 
