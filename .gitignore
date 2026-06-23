@@ -12,4 +12,5 @@ web/dist/
 iflycode_proxy/static/
 web/tsconfig.tsbuildinfo
 .claude/
+.pytest_cache/
 
