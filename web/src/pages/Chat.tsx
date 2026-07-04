@@ -312,14 +312,14 @@ const Chat: React.FC = () => {
               }}
             >
               {msg.role === 'assistant' && (
-                <Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#389e0d', flexShrink: 0, marginRight: 10, marginTop: 2 }} />
+                <Avatar icon={<RobotOutlined />} style={{ backgroundColor: '#1677ff', flexShrink: 0, marginRight: 10, marginTop: 2 }} />
               )}
               <div
                 style={{
                   maxWidth: '75%',
                   padding: '10px 16px',
                   borderRadius: 12,
-                  backgroundColor: msg.role === 'user' ? '#389e0d' : '#fff',
+                  backgroundColor: msg.role === 'user' ? '#1677ff' : '#fff',
                   color: msg.role === 'user' ? '#fff' : '#333',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
@@ -335,7 +335,7 @@ const Chat: React.FC = () => {
                 )}
               </div>
               {msg.role === 'user' && (
-                <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068', flexShrink: 0, marginLeft: 10, marginTop: 2 }} />
+                <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#5b8ff9', flexShrink: 0, marginLeft: 10, marginTop: 2 }} />
               )}
             </div>
           ))

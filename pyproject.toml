@@ -21,6 +21,7 @@ dev = ["pytest>=8.3", "pytest-asyncio>=0.24"]
 
 [project.scripts]
 iflycode-proxy = "iflycode_proxy.cli:cli"
+xunfei-cc = "iflycode_proxy.xunfei_cc:main"
 
 [build-system]
 requires = ["hatchling"]

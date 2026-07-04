@@ -94,7 +94,7 @@ const formatHour = (h: string) => {
   return parts.length >= 2 ? parts[1] : h;
 };
 
-const PIE_COLORS = ['#389e0d', '#722ed1', '#52c41a', '#faad14', '#ff4d4f', '#13c2c2', '#eb2f96'];
+const PIE_COLORS = ['#1677ff', '#722ed1', '#00b96b', '#faad14', '#ff4d4f', '#13c2c2', '#eb2f96'];
 
 const AccountDetail: React.FC = () => {
   const { accountId } = useParams<{ accountId: string }>();
@@ -249,11 +249,11 @@ const AccountDetail: React.FC = () => {
                 <Statistic title="累计请求" value={stats?.total_requests || 0} valueStyle={{ fontSize: 20 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span><CheckCircleOutlined style={{ color: '#52c41a' }} /> 成功 {stats ? stats.today_requests - stats.today_errors : 0} <Tag color="green">{stats?.today_success_rate || 0}%</Tag></span>
+                <span><CheckCircleOutlined style={{ color: '#00b96b' }} /> 成功 {stats ? stats.today_requests - stats.today_errors : 0} <Tag color="green">{stats?.today_success_rate || 0}%</Tag></span>
                 <span><CloseCircleOutlined style={{ color: '#ff4d4f' }} /> 失败 {stats?.today_errors || 0} <Tag color="red">{stats && stats.today_requests > 0 ? (100 - stats.today_success_rate).toFixed(1) : 0}%</Tag></span>
               </div>
               <div>
-                <ClockCircleOutlined /> 流式 {stats?.stream_count || 0} &nbsp;|&nbsp; 平均延迟 <span style={{ color: (stats?.avg_latency_ms || 0) < 500 ? '#52c41a' : (stats?.avg_latency_ms || 0) < 1500 ? '#faad14' : '#ff4d4f' }}>{stats?.avg_latency_ms || 0}ms</span>
+                <ClockCircleOutlined /> 流式 {stats?.stream_count || 0} &nbsp;|&nbsp; 平均延迟 <span style={{ color: (stats?.avg_latency_ms || 0) < 500 ? '#00b96b' : (stats?.avg_latency_ms || 0) < 1500 ? '#faad14' : '#ff4d4f' }}>{stats?.avg_latency_ms || 0}ms</span>
               </div>
             </Space>
           </Card>
@@ -262,7 +262,7 @@ const AccountDetail: React.FC = () => {
           <Card title="Token 消耗" size="small">
             <Space direction="vertical" size={6} style={{ width: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Statistic title="24h Tokens" value={fmtK((stats?.prompt_tokens_24h || 0) + (stats?.completion_tokens_24h || 0))} valueStyle={{ fontSize: 20, color: '#389e0d' }} />
+                <Statistic title="24h Tokens" value={fmtK((stats?.prompt_tokens_24h || 0) + (stats?.completion_tokens_24h || 0))} valueStyle={{ fontSize: 20, color: '#1677ff' }} />
                 <Statistic title="累计 Tokens" value={fmtK((stats?.prompt_tokens || 0) + (stats?.completion_tokens || 0))} valueStyle={{ fontSize: 20, color: '#722ed1' }} />
               </div>
               <div>
@@ -292,7 +292,7 @@ const AccountDetail: React.FC = () => {
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip labelFormatter={(l) => String(l)} />
                   <Legend />
-                  <Area type="monotone" dataKey="request_count" name="请求数" stroke="#389e0d" fill="#389e0d" fillOpacity={0.15} strokeWidth={2} />
+                  <Area type="monotone" dataKey="request_count" name="请求数" stroke="#1677ff" fill="#1677ff" fillOpacity={0.15} strokeWidth={2} />
                   <Area type="monotone" dataKey="error_count" name="错误数" stroke="#ff4d4f" fill="#ff4d4f" fillOpacity={0.1} strokeWidth={1.5} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -307,7 +307,7 @@ const AccountDetail: React.FC = () => {
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip labelFormatter={(l) => String(l)} />
                   <Legend />
-                  <Area type="monotone" dataKey="prompt_tokens" name="Prompt" stroke="#389e0d" fill="#389e0d" fillOpacity={0.15} strokeWidth={2} />
+                  <Area type="monotone" dataKey="prompt_tokens" name="Prompt" stroke="#1677ff" fill="#1677ff" fillOpacity={0.15} strokeWidth={2} />
                   <Area type="monotone" dataKey="completion_tokens" name="Completion" stroke="#722ed1" fill="#722ed1" fillOpacity={0.1} strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -401,7 +401,7 @@ const AccountDetail: React.FC = () => {
                     <XAxis type="number" tick={{ fontSize: 10 }} />
                     <YAxis dataKey="model" type="category" width={100} tick={{ fontSize: 11 }} />
                     <Tooltip />
-                    <Bar dataKey="count" name="请求次数" fill="#389e0d" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="count" name="请求次数" fill="#1677ff" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </Card>
@@ -459,7 +459,7 @@ const AccountDetail: React.FC = () => {
               {
                 title: '延迟', dataIndex: 'latency_ms', key: 'latency_ms', width: 70,
                 render: (v: number) => {
-                  const color = v < 500 ? '#52c41a' : v < 1500 ? '#faad14' : '#ff4d4f';
+                  const color = v < 500 ? '#00b96b' : v < 1500 ? '#faad14' : '#ff4d4f';
                   return <span style={{ color, fontWeight: v >= 1500 ? 600 : 400 }}>{v}ms</span>;
                 },
               },

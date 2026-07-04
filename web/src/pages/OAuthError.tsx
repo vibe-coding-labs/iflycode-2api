@@ -12,7 +12,7 @@ const OAuthErrorPage: React.FC = () => {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, #389e0d 0%, #237804 100%)',
+      background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
     }}>
       <Card style={{ width: 480, borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}
             styles={{ body: { padding: 32 } }}>

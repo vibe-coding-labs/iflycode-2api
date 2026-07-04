@@ -21,7 +21,7 @@ const REFRESH_OPTIONS = [
 
 const fmt = (n: number) => n.toLocaleString();
 const fmtTokens = (n: number) => n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
-const successRateColor = (rate: number) => rate >= 95 ? '#52c41a' : rate >= 80 ? '#faad14' : '#ff4d4f';
+const successRateColor = (rate: number) => rate >= 95 ? '#00b96b' : rate >= 80 ? '#faad14' : '#ff4d4f';
 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -80,7 +80,7 @@ const Dashboard: React.FC = () => {
 
       {/* Banner Card */}
       <Card
-        style={{ marginBottom: 16, background: 'linear-gradient(135deg, #389e0d 0%, #237804 100%)', border: 'none' }}
+        style={{ marginBottom: 16, background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)', border: 'none' }}
         bodyStyle={{ padding: '24px 32px' }}
       >
         <Row gutter={[32, 16]} align="middle">
@@ -123,7 +123,7 @@ const Dashboard: React.FC = () => {
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
                   <Legend />
-                  <Area type="monotone" dataKey="count" name="请求数" stroke="#389e0d" fill="#389e0d" fillOpacity={0.15} strokeWidth={2} />
+                  <Area type="monotone" dataKey="count" name="请求数" stroke="#1677ff" fill="#1677ff" fillOpacity={0.15} strokeWidth={2} />
                   <Area type="monotone" dataKey="errors" name="错误数" stroke="#ff4d4f" fill="#ff4d4f" fillOpacity={0.1} strokeWidth={1.5} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -138,7 +138,7 @@ const Dashboard: React.FC = () => {
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
                   <Legend />
-                  <Area type="monotone" dataKey="input_tokens" name="Prompt" stroke="#389e0d" fill="#389e0d" fillOpacity={0.15} strokeWidth={2} />
+                  <Area type="monotone" dataKey="input_tokens" name="Prompt" stroke="#1677ff" fill="#1677ff" fillOpacity={0.15} strokeWidth={2} />
                   <Area type="monotone" dataKey="output_tokens" name="Completion" stroke="#722ed1" fill="#722ed1" fillOpacity={0.1} strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -157,7 +157,7 @@ const Dashboard: React.FC = () => {
                 <Statistic title="累计请求" value={stats.all_time.total_requests} prefix={<CloudSyncOutlined />} valueStyle={{ fontSize: 20 }} />
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span><CheckCircleOutlined style={{ color: '#52c41a' }} /> 成功 {fmt(stats.today_success_count)} <Tag color="green">{todaySuccessRate}%</Tag></span>
+                <span><CheckCircleOutlined style={{ color: '#00b96b' }} /> 成功 {fmt(stats.today_success_count)} <Tag color="green">{todaySuccessRate}%</Tag></span>
                 <span><CloseCircleOutlined style={{ color: '#ff4d4f' }} /> 失败 {fmt(stats.today_error_count)} <Tag color="red">{stats.today_requests > 0 ? (100 - todaySuccessRate).toFixed(1) : 0}%</Tag></span>
               </div>
               <div>
@@ -170,7 +170,7 @@ const Dashboard: React.FC = () => {
           <Card title="Token 消耗" size="small">
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Statistic title="24h Tokens" value={fmtTokens(todayTokens)} valueStyle={{ fontSize: 20, color: '#389e0d' }} />
+                <Statistic title="24h Tokens" value={fmtTokens(todayTokens)} valueStyle={{ fontSize: 20, color: '#1677ff' }} />
                 <Statistic title="累计 Tokens" value={fmtTokens(allTimeTokens)} valueStyle={{ fontSize: 20, color: '#722ed1' }} />
               </div>
               <div>
@@ -208,7 +208,7 @@ const Dashboard: React.FC = () => {
                   <XAxis type="number" tick={{ fontSize: 11 }} />
                   <YAxis dataKey="model" type="category" width={100} tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="count" name="请求数" fill="#389e0d" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="count" name="请求数" fill="#1677ff" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -225,7 +225,7 @@ const Dashboard: React.FC = () => {
                   <XAxis dataKey="api_key" tick={{ fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
-                  <Bar dataKey="count" name="请求数" fill="#52c41a" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" name="请求数" fill="#1677ff" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

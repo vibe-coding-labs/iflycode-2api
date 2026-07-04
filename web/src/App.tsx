@@ -52,13 +52,13 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const App: React.FC = () => (
   <ConfigProvider locale={zhCN} theme={{
     token: {
-      colorPrimary: '#389e0d',
-      colorSuccess: '#52c41a',
-      colorInfo: '#389e0d',
+      colorPrimary: '#1677ff',
+      colorSuccess: '#00b96b',
+      colorInfo: '#1677ff',
     },
     components: {
       Layout: { siderBg: '#ffffff' },
-      Menu: { itemSelectedBg: '#f6ffed', itemSelectedColor: '#389e0d' },
+      Menu: { itemSelectedBg: '#e6f4ff', itemSelectedColor: '#1677ff' },
     },
   }}>
     <BrowserRouter>

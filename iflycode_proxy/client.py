@@ -12,6 +12,12 @@ import httpx
 log = logging.getLogger("iflycode-proxy.client")
 
 BASE_URL = "https://iflycode-xfsaas.xfyun.cn"
+
+# Override via env var (used for testing with mock upstream)
+import os as _os
+_MOCK_URL = _os.environ.get("IFLYCODE_BASE_URL", "").strip()
+if _MOCK_URL:
+    BASE_URL = _MOCK_URL.rstrip("/")
 AGENT_VERSION = "3.4.2"
 
 DEFAULT_CLIENT_INFO = {

@@ -7,6 +7,8 @@ validity. Failed accounts get a longer backoff interval (4x) to avoid hammering
 the upstream.
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time

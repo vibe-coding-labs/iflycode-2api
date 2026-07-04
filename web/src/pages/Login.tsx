@@ -35,7 +35,7 @@ const LoginPage: React.FC = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'linear-gradient(135deg, #389e0d 0%, #237804 100%)',
+      background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
       position: 'relative',
     }}>
       <Tooltip title="去 GitHub Star 支持我们">

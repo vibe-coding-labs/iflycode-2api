@@ -1,5 +1,7 @@
 """iFlyCode SSO authentication service — handles login URL and token retrieval."""
 
+from __future__ import annotations
+
 import logging
 import re
 import uuid

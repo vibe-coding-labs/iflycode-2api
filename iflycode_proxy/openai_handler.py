@@ -66,8 +66,7 @@ def _summarize_messages(messages: list) -> str:
 
 def translate_request(req_body: dict) -> dict:
     model = req_body.get("model", "")
-    stream = bool(req_body.get("stream", False))
-    body: dict = {"stream": stream}
+    body: dict = {"stream": True}  # Always stream from upstream; proxy handles buffering
     messages = req_body.get("messages")
     if messages:
         body["messages"] = messages
@@ -280,14 +279,15 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
 
         # Strip -coding suffix and determine mode
         is_coding_mode = model.endswith("-coding")
-        real_model = model.removesuffix("-coding") if is_coding_mode else model
+        real_model = model[:-len("-coding")] if is_coding_mode else model
 
+        original_stream = bool(req_body.get("stream", False))
         jc_body = translate_request(req_body)
 
         model_code = cred_router.get_default_model(api_key or None)
         # Strip -coding from default model too (stored with suffix for persistence)
         if model_code and model_code.endswith("-coding"):
-            model_code = model_code.removesuffix("-coding")
+            model_code = model_code[:-len("-coding")] if model_code.endswith("-coding") else model_code
         # Use real model code (without -coding suffix) for upstream
         effective_model_code = model_code or real_model
         if effective_model_code and effective_model_code != DEFAULT_MODEL:
@@ -306,11 +306,11 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
             protocol=PROTOCOL, endpoint="/v1/chat/completions",
             api_key=api_key, model=model,
             messages_summary=_summarize_messages(req_body.get("messages", [])),
-            stream=bool(jc_body.get("stream")),
+            stream=original_stream,
             extra={"message_count": len(req_body.get("messages", []))},
         )
 
-        if jc_body.get("stream"):
+        if original_stream:
             return _stream_chat(client, jc_body, model, api_key)
 
         return _stream_chat_non_streaming(client, jc_body, model, api_key)
