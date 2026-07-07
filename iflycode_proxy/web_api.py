@@ -434,4 +434,74 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
             "active_sessions": s.get("active_sessions", 0),
         }
 
+    # -- Batch Import (API Key authenticated, no JWT needed) --
+
+    @router.post("/v1/accounts/batch-import")
+    async def batch_import_accounts(request: Request):
+        """Batch import accounts via API Key (OpenAI-compatible auth)."""
+        api_key = request.headers.get("x-api-key", "")
+        if not api_key:
+            raise HTTPException(401, "x-api-key header is required")
+        body = await request.json()
+        account_list = body.get("accounts", [])
+        if not account_list or not isinstance(account_list, list):
+            raise HTTPException(400, "accounts must be a non-empty array")
+        added = 0
+        account_ids = []
+        errors = []
+        for i, acc_data in enumerate(account_list):
+            try:
+                spark_token = (acc_data.get("spark_token") or "").strip()
+                if not spark_token:
+                    errors.append({"index": i, "error": "spark_token is required"})
+                    continue
+                account_id = _generate_account_id()
+                api_key_new = _generate_api_key()
+                user_id = (acc_data.get("user_id") or "").strip()
+                is_default = bool(acc_data.get("is_default", False))
+                daily_limit = int(acc_data.get("daily_limit", 0))
+                monthly_limit = int(acc_data.get("monthly_limit", 0))
+                remark = (acc_data.get("remark") or "").strip()
+                db.add_account(
+                    account_id, api_key_new, spark_token, user_id,
+                    is_default=is_default, daily_limit=daily_limit,
+                    monthly_limit=monthly_limit, remark=remark,
+                )
+                added += 1
+                account_ids.append({"account_id": account_id, "api_key": api_key_new})
+            except Exception as e:
+                errors.append({"index": i, "error": str(e)})
+        return {"ok": True, "added": added, "account_ids": account_ids, "errors": errors}
+
+    @router.get("/accounts/{account_id}/quota")
+    async def get_account_quota(account_id: str):
+        """Get quota configuration and current usage for an account."""
+        acc = db.get_account(account_id)
+        if not acc:
+            raise HTTPException(404, "Account not found")
+        from iflycode_proxy.quota import get_usage
+        usage = get_usage(db, account_id, acc["api_key"])
+        return {
+            "account_id": account_id,
+            "daily_limit": usage["daily_limit"],
+            "monthly_limit": usage["monthly_limit"],
+            "today_requests": usage["today_requests"],
+            "month_tokens": usage["month_tokens"],
+        }
+
+    @router.put("/accounts/{account_id}/quota")
+    async def update_account_quota(account_id: str, request: Request):
+        """Update quota limits for an account."""
+        body = await request.json()
+        daily_limit = int(body.get("daily_limit", 0))
+        monthly_limit = int(body.get("monthly_limit", 0))
+        conn = db._get_conn()
+        conn.execute(
+            "UPDATE accounts SET daily_limit = ?, monthly_limit = ?, updated_at = datetime('now') "
+            "WHERE account_id = ?",
+            (daily_limit, monthly_limit, account_id),
+        )
+        conn.commit()
+        return {"ok": True, "account_id": account_id, "daily_limit": daily_limit, "monthly_limit": monthly_limit}
+
     return router

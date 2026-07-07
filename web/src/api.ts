@@ -205,6 +205,22 @@ export const api = {
   reorderAccounts: (accountIds: string[]) =>
     request<{ ok: boolean }>('/api/accounts/reorder', { method: 'PUT', body: JSON.stringify({ account_ids: accountIds }) }),
 
+  // Quota
+  getAccountQuota: (accountId: string) =>
+    request<{ daily_limit: number; monthly_limit: number; today_requests: number; month_tokens: number }>(
+      `/api/accounts/${enc(accountId)}/quota`
+    ),
+  updateAccountQuota: (accountId: string, dailyLimit: number, monthlyLimit: number) =>
+    request<{ ok: boolean }>(`/api/accounts/${enc(accountId)}/quota`, {
+      method: 'PUT',
+      body: JSON.stringify({ daily_limit: dailyLimit, monthly_limit: monthlyLimit }),
+    }),
+  batchImportAccounts: (accounts: Array<{ spark_token: string; user_id?: string; is_default?: boolean; daily_limit?: number; monthly_limit?: number; remark?: string }>) =>
+    request<{ ok: boolean; added: number; account_ids: Array<{ account_id: string; api_key: string }>; errors: Array<{ index: number; error: string }> }>(
+      '/api/v1/accounts/batch-import',
+      { method: 'POST', body: JSON.stringify({ accounts }) }
+    ),
+
   // Stats
   getStats: () => request<Stats>('/api/stats'),
   getLogs: (limit: number = 100, filters?: { api_key?: string; model?: string; status?: number }) => {

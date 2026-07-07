@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Col, Row, Statistic, Typography, Spin, Select, Button,
   Space, Tag, Table, message, Divider, Tooltip as AntTooltip, Popconfirm,
-  Descriptions,
+  Descriptions, InputNumber,
 } from 'antd';
 import {
   ArrowLeftOutlined, ApiOutlined, ThunderboltOutlined,
@@ -109,6 +109,10 @@ const AccountDetail: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [hourRange, setHourRange] = useState<number>(24);
   const [loading, setLoading] = useState(true);
+  const [quotaData, setQuotaData] = useState<{ daily_limit: number; monthly_limit: number; today_requests: number; month_tokens: number } | null>(null);
+  const [quotaDailyLimit, setQuotaDailyLimit] = useState<number>(0);
+  const [quotaMonthlyLimit, setQuotaMonthlyLimit] = useState<number>(0);
+  const [quotaSaving, setQuotaSaving] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -125,6 +129,12 @@ const AccountDetail: React.FC = () => {
     try { const h = await api.getAccountHourlyStats(decodedId, hourRange); setHourlyData(h.data || []); } catch { /* ignore */ }
     try { setRecentLogs(await api.getAccountRecentLogs(decodedId, 20)); } catch { /* ignore */ }
     try { setModels(await api.getAccountModels(decodedId)); } catch { /* ignore */ }
+    try {
+      const q = await api.getAccountQuota(decodedId);
+      setQuotaData(q);
+      setQuotaDailyLimit(q.daily_limit);
+      setQuotaMonthlyLimit(q.monthly_limit);
+    } catch { /* ignore */ }
 
     setLoading(false);
   };
@@ -165,6 +175,19 @@ const AccountDetail: React.FC = () => {
       navigate('/accounts');
     } catch (e: unknown) {
       message.error(e instanceof Error ? e.message : '删除失败');
+    }
+  };
+
+  const handleSaveQuota = async () => {
+    setQuotaSaving(true);
+    try {
+      await api.updateAccountQuota(decodedId, quotaDailyLimit, quotaMonthlyLimit);
+      message.success('配额已更新');
+      fetchData();
+    } catch (e: unknown) {
+      message.error(e instanceof Error ? e.message : '更新配额失败');
+    } finally {
+      setQuotaSaving(false);
     }
   };
 
@@ -276,7 +299,51 @@ const AccountDetail: React.FC = () => {
         </Col>
       </Row>
 
-      {/* 3. Hourly Charts — AreaChart */}
+      {/* 3. Quota Limits */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={12}>
+          <Card title="配额限制" size="small">
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <div>
+                <Typography.Text>每日请求上限: </Typography.Text>
+                <InputNumber
+                  min={0}
+                  value={quotaDailyLimit}
+                  onChange={v => setQuotaDailyLimit(v || 0)}
+                  style={{ width: 120 }}
+                  addonAfter="次/天"
+                  size="small"
+                />
+                <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>0 = 不限制</Typography.Text>
+              </div>
+              <div>
+                <Typography.Text>每月 Token 上限: </Typography.Text>
+                <InputNumber
+                  min={0}
+                  step={10000}
+                  value={quotaMonthlyLimit}
+                  onChange={v => setQuotaMonthlyLimit(v || 0)}
+                  style={{ width: 180 }}
+                  addonAfter="tokens/月"
+                  size="small"
+                />
+                <Typography.Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>0 = 不限制</Typography.Text>
+              </div>
+              <Button size="small" type="primary" onClick={handleSaveQuota} loading={quotaSaving}>保存配额</Button>
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} md={12}>
+          <Card title="当前使用量" size="small">
+            <Statistic title="今日请求" value={quotaData?.today_requests || 0} suffix={"/ " + (quotaData?.daily_limit ? String(quotaData.daily_limit) : "∞")} valueStyle={{ fontSize: 20 }} />
+            <div style={{ marginTop: 12 }}>
+              <Statistic title="本月 Token" value={fmtK(quotaData?.month_tokens || 0)} suffix={"/ " + (quotaData?.monthly_limit ? fmtK(quotaData.monthly_limit) : "∞")} valueStyle={{ fontSize: 20 }} />
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 4. Hourly Charts — AreaChart */}
       {hourlyData.length > 0 && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={24} lg={12}>

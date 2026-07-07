@@ -52,6 +52,13 @@ const SETTING_GROUPS: SettingGroup[] = [
       { key: 'storage_max_mb', label: '存储空间上限 (MB)', type: 'number', numberPlaceholder: 1024, tooltip: 'SQLite 数据库文件超过此大小时自动清理老日志（默认 1024 MB = 1 GB）' },
     ],
   },
+  {
+    title: '配额默认值',
+    items: [
+      { key: 'global_daily_limit', label: '全局每日请求上限', type: 'number', numberPlaceholder: 0, tooltip: '新账号的默认每日请求上限（0=不限制）' },
+      { key: 'global_monthly_limit', label: '全局每月 Token 上限', type: 'number', numberPlaceholder: 0, tooltip: '新账号的默认每月 Token 上限（0=不限制）' },
+    ],
+  },
 ];
 
 const Settings: React.FC = () => {
