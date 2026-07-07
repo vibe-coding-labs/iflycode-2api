@@ -379,7 +379,7 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
     async def health() -> Any:
         return JSONResponse(content={
             "status": "ok",
-            "service": "iflycode-openai-proxy",
+            "service": "iflycode-2api",
             "accounts": len(cred_router.list_accounts()),
             "endpoints": ["/v1/chat/completions", "/v1/models"],
         })
