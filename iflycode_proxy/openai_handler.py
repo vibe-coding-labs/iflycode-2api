@@ -264,6 +264,20 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
             session_id = str(uuid.uuid4())
         record_session(account_id, session_id)
 
+        # ── Quota check ──
+        try:
+            from iflycode_proxy.quota import check_daily_quota
+            db = getattr(request.app.state, "db", None)
+            if db and api_key:
+                acc_id = cred_router.get_account_id(api_key or None) or api_key
+                allowed, reason = check_daily_quota(db, acc_id, api_key)
+                if not allowed:
+                    log.warning("Quota exceeded for %s: %s", acc_id, reason)
+                    return _error_response(reason, 429)
+        except Exception as exc:
+            log.warning("Quota check failed (non-fatal): %s", exc)
+        # ── End quota check ──
+
         try:
             req_body = await request.json()
         except Exception as exc:
