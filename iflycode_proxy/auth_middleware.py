@@ -35,7 +35,6 @@ AUTH_WHITELIST = frozenset({
     "/api/auth/init",
     "/api/auth/login",
     "/api/health",
-    "/api/v1/accounts/batch-import",
 })
 
 JWT_ALGORITHM = "HS256"

@@ -438,10 +438,19 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
 
     @router.post("/v1/accounts/batch-import")
     async def batch_import_accounts(request: Request):
-        """Batch import accounts via API Key (OpenAI-compatible auth)."""
+        """Batch import accounts via API Key (OpenAI-compatible auth).
+
+        The caller must provide a valid x-api-key header that belongs to
+        an already-configured account in this proxy. This ensures only
+        authenticated users can import new accounts.
+        """
         api_key = request.headers.get("x-api-key", "")
         if not api_key:
             raise HTTPException(401, "x-api-key header is required")
+        # Validate API key against known accounts
+        owner = db.get_account_by_api_key(api_key)
+        if not owner:
+            raise HTTPException(403, "Unknown API key — batch import requires a valid key from an existing account")
         body = await request.json()
         account_list = body.get("accounts", [])
         if not account_list or not isinstance(account_list, list):
