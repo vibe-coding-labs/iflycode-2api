@@ -6,7 +6,7 @@ A session is "active" if it has been seen within the TTL window.
 Reference: JoyCodeProxy pkg/proxy/sessions.go
 
 Usage:
-    from iflycode_proxy.sessions import record_session, get_active_sessions
+    from iflycode_2api.sessions import record_session, get_active_sessions
 
     # On each API request
     record_session("user-abc", "session-xyz")

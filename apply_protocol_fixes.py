@@ -18,7 +18,7 @@ OPEN_TAG = "<invoke>"
 CLOSE_TAG = "</invoke>"
 OLD_TAG = "专区"  # 专区
 
-with open("iflycode_proxy/anthropic_handler.py", "r") as f:
+with open("iflycode_2api/anthropic_handler.py", "r") as f:
     content = f.read()
 
 # ============================================================
@@ -257,7 +257,7 @@ content = content.replace(
 )
 print("Fix 8: Router now passes tools to both stream and non-stream paths")
 
-with open("iflycode_proxy/anthropic_handler.py", "w") as f:
+with open("iflycode_2api/anthropic_handler.py", "w") as f:
     f.write(content)
 
 print("\nAll fixes applied successfully!")

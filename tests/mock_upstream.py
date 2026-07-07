@@ -2,7 +2,7 @@
 
 Usage:
     python tests/mock_upstream.py [port]
-    IFLYCODE_BASE_URL=http://localhost:9000 iflycode-proxy serve
+    IFLYCODE_BASE_URL=http://localhost:9000 iflycode-2api serve
 """
 from __future__ import annotations
 

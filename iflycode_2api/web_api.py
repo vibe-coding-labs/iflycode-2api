@@ -5,12 +5,12 @@ from typing import Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 
-from iflycode_proxy.auth import get_login_url, poll_login_status
-from iflycode_proxy.auth_middleware import hash_password, check_password, generate_token, _jwt_secret
-from iflycode_proxy.db import Database, _generate_account_id, _generate_api_key
-from iflycode_proxy.sessions import get_active_sessions, get_all_active_counts, session_stats
+from iflycode_2api.auth import get_login_url, poll_login_status
+from iflycode_2api.auth_middleware import hash_password, check_password, generate_token, _jwt_secret
+from iflycode_2api.db import Database, _generate_account_id, _generate_api_key
+from iflycode_2api.sessions import get_active_sessions, get_all_active_counts, session_stats
 
-log = logging.getLogger("iflycode-proxy.web-api")
+log = logging.getLogger("iflycode-2api.web-api")
 
 
 def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
@@ -309,7 +309,7 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
         """Return the project's GitHub star count."""
         try:
             import httpx
-            resp = httpx.get("https://api.github.com/repos/vibe-coding-labs/iflycode-proxy", timeout=5)
+            resp = httpx.get("https://api.github.com/repos/vibe-coding-labs/iflycode-2api", timeout=5)
             data = resp.json()
             stars = data.get("stargazers_count", 0)
             return {"stars": stars}
@@ -352,7 +352,7 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
 
     @router.get("/proxy-logs")
     async def get_proxy_logs(lines: int = 100):
-        from iflycode_proxy.proxy_logger import get_log_dir
+        from iflycode_2api.proxy_logger import get_log_dir
         log_dir = get_log_dir()
         log_file = log_dir / "proxy.log"
         if not log_file.exists():
@@ -366,7 +366,7 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
             log_lines = result.stdout.strip().split("\n") if result.stdout.strip() else []
         except Exception:
             log_lines = []
-        from iflycode_proxy.proxy_logger import get_log_files
+        from iflycode_2api.proxy_logger import get_log_files
         return {"logs": log_lines, "files": get_log_files()}
 
     # -- Sessions --
@@ -488,7 +488,7 @@ def create_web_api_router(db: Database, cred_router=None) -> APIRouter:
         acc = db.get_account(account_id)
         if not acc:
             raise HTTPException(404, "Account not found")
-        from iflycode_proxy.quota import get_usage
+        from iflycode_2api.quota import get_usage
         usage = get_usage(db, account_id, acc["api_key"])
         return {
             "account_id": account_id,

@@ -13,7 +13,7 @@ export default defineConfig({
   },
   root: '.',
   build: {
-    outDir: '../iflycode_proxy/static',
+    outDir: '../iflycode_2api/static',
     emptyOutDir: true,
   },
 });

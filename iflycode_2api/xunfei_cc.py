@@ -1,4 +1,4 @@
-"""xunfei-cc — CLI shortcut for iflycode-proxy serve.
+"""xunfei-cc — CLI shortcut for iflycode-2api serve.
 
 Usage:
     xunfei-cc serve [-p PORT] [--service]   # Start proxy
@@ -13,8 +13,8 @@ import shlex
 def main():
     args = sys.argv[1:] if len(sys.argv) > 1 else ["serve"]
 
-    # Resolve iflycode-proxy to the right python module call
-    cmd = [sys.executable, "-m", "iflycode_proxy.cli"] + args
+    # Resolve iflycode-2api to the right python module call
+    cmd = [sys.executable, "-m", "iflycode_2api.cli"] + args
 
     if "-v" in args:
         print(f"xunfei-cc 1.0.0 → {' '.join(shlex.quote(a) for a in cmd)}")

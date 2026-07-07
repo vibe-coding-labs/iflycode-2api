@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import httpx
 
-log = logging.getLogger("iflycode-proxy.client")
+log = logging.getLogger("iflycode-2api.client")
 
 BASE_URL = "https://iflycode-xfsaas.xfyun.cn"
 

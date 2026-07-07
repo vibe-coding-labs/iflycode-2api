@@ -143,13 +143,13 @@ import type { Account } from '../api';
 ```
 
 - [ ] **Step 3: 验证前端构建**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web && npm run build`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web && npm run build`
 Expected:
   - Exit code: 0
   - Output contains: "built in"
 
 - [ ] **Step 4: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add web/src/components/BrandIcons.tsx web/src/pages/Accounts.tsx && git commit -m "feat(ui): replace generic icons with Anthropic/OpenAI brand logos, add row click navigation"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add web/src/components/BrandIcons.tsx web/src/pages/Accounts.tsx && git commit -m "feat(ui): replace generic icons with Anthropic/OpenAI brand logos, add row click navigation"`
 
 ---
 
@@ -344,12 +344,12 @@ class Database:
 ```
 
 - [ ] **Step 6: 验证后端启动**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && lsof -ti:40419 2>/dev/null | xargs kill 2>/dev/null; sleep 1; .venv/bin/python -m iflycode_proxy.cli serve &>/tmp/iflycode-proxy.log & sleep 2 && curl -s http://localhost:40419/api/health`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && lsof -ti:40419 2>/dev/null | xargs kill 2>/dev/null; sleep 1; .venv/bin/python -m iflycode_proxy.cli serve &>/tmp/iflycode-proxy.log & sleep 2 && curl -s http://localhost:40419/api/health`
 Expected:
   - Output contains: `"status": "ok"`
 
 - [ ] **Step 7: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add iflycode_proxy/db.py iflycode_proxy/server.py && git commit -m "feat(db): add prompt_tokens and completion_tokens tracking to request logs"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add iflycode_proxy/db.py iflycode_proxy/server.py && git commit -m "feat(db): add prompt_tokens and completion_tokens tracking to request logs"`
 
 ---
 
@@ -682,13 +682,13 @@ export default AccountDetail;
 ```
 
 - [ ] **Step 3: 验证前端构建**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web && npm run build`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web && npm run build`
 Expected:
   - Exit code: 0
   - Output contains: "built in"
 
 - [ ] **Step 4: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add web/src/api.ts web/src/pages/AccountDetail.tsx && git commit -m "feat(ui): enhance account detail page with token stats, success rate, and brand icons"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add web/src/api.ts web/src/pages/AccountDetail.tsx && git commit -m "feat(ui): enhance account detail page with token stats, success rate, and brand icons"`
 
 ---
 
@@ -698,7 +698,7 @@ Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add web
 **Files:** None
 
 - [ ] **Step 1: 重启后端服务并验证健康状态**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && lsof -ti:40419 2>/dev/null | xargs kill 2>/dev/null; sleep 1; .venv/bin/python -m iflycode_proxy.cli serve &>/tmp/iflycode-proxy.log & sleep 2 && curl -s http://localhost:40419/api/health`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && lsof -ti:40419 2>/dev/null | xargs kill 2>/dev/null; sleep 1; .venv/bin/python -m iflycode_proxy.cli serve &>/tmp/iflycode-proxy.log & sleep 2 && curl -s http://localhost:40419/api/health`
 Expected:
   - Output contains: `"status": "ok"`
 
@@ -714,7 +714,7 @@ Expected:
   - Output contains: "api_key"
 
 - [ ] **Step 4: 验证数据库迁移成功**
-Run: `sqlite3 ~/.iflycode-proxy/proxy.db ".schema request_logs"`
+Run: `sqlite3 ~/.iflycode-2api/proxy.db ".schema request_logs"`
 Expected:
   - Output contains: "prompt_tokens"
   - Output contains: "completion_tokens"

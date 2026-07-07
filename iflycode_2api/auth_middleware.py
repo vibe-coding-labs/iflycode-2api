@@ -25,9 +25,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from iflycode_proxy.db import Database
+from iflycode_2api.db import Database
 
-log = logging.getLogger("iflycode-proxy.auth")
+log = logging.getLogger("iflycode-2api.auth")
 
 # Endpoints that don't require authentication
 AUTH_WHITELIST = frozenset({
@@ -71,7 +71,7 @@ def generate_token(username: str, secret: str) -> str:
         "username": username,
         "iat": int(time.time()),
         "exp": int(time.time()) + JWT_EXPIRY_SECONDS,
-        "iss": "iflycode-proxy",
+        "iss": "iflycode-2api",
     }
     return pyjwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
 

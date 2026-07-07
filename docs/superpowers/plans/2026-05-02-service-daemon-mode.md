@@ -5,13 +5,13 @@
 
 **Goal:** 添加 `--service` 启动模式，当代理进程意外退出时自动重启，确保服务持续可用。
 
-**Architecture:** 用户执行 `iflycode-proxy serve --service` → CLI 以 supervisor 角色启动子进程运行实际 uvicorn 服务 → 监控子进程退出事件 → 非正常退出时自动重启（指数退避 + 最大重试） → 正常退出（SIGTERM/SIGINT）时 supervisor 也退出。supervisor 自身通过 double-fork 守护化，脱离终端。
+**Architecture:** 用户执行 `iflycode-2api serve --service` → CLI 以 supervisor 角色启动子进程运行实际 uvicorn 服务 → 监控子进程退出事件 → 非正常退出时自动重启（指数退避 + 最大重试） → 正常退出（SIGTERM/SIGINT）时 supervisor 也退出。supervisor 自身通过 double-fork 守护化，脱离终端。
 
 **Tech Stack:** Python 3.12, click 8.2, uvicorn 0.34, os/signal 标准库
 
 **Risks:**
 - 快速崩溃循环可能占用大量资源 → 缓解：指数退避（1s→2s→4s→8s→max 30s）+ 连续崩溃 10 次后放弃
-- 守护进程日志不可见 → 缓解：写入独立日志文件（`~/.iflycode-proxy/daemon.log`）
+- 守护进程日志不可见 → 缓解：写入独立日志文件（`~/.iflycode-2api/daemon.log`）
 - PID 文件冲突 → 缓解：启动时检测并清理 stale PID 文件
 
 ---
@@ -108,7 +108,7 @@ def run_supervisor(
 
     if _PID_FILE.exists() and not _is_stale_pid():
         print(f"Daemon already running (PID {_PID_FILE.read_text().strip()}). "
-              f"Stop it first: iflycode-proxy serve --stop-service")
+              f"Stop it first: iflycode-2api serve --stop-service")
         sys.exit(1)
 
     _PID_DIR.mkdir(parents=True, exist_ok=True)
@@ -215,13 +215,13 @@ def get_service_status() -> Optional[int]:
 ```
 
 - [ ] **Step 2: 验证 daemon 模块导入正常**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -c "from iflycode_proxy.daemon import run_supervisor, stop_service, get_service_status; print('daemon module OK')"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -c "from iflycode_proxy.daemon import run_supervisor, stop_service, get_service_status; print('daemon module OK')"`
 Expected:
   - Exit code: 0
   - Output contains: "daemon module OK"
 
 - [ ] **Step 3: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add iflycode_proxy/daemon.py && git commit -m "feat(daemon): add process supervisor with auto-restart and exponential backoff"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add iflycode_proxy/daemon.py && git commit -m "feat(daemon): add process supervisor with auto-restart and exponential backoff"`
 
 ---
 
@@ -257,7 +257,7 @@ def serve(ctx, host: str, port: int, service: bool):
                         log_level="debug" if kwargs.get("verbose") else "info")
 
         click.echo(f"Starting iFlyCode Proxy as daemon on http://{host}:{port}")
-        click.echo(f"  Log file: ~/.iflycode-proxy/daemon.log")
+        click.echo(f"  Log file: ~/.iflycode-2api/daemon.log")
         click.echo(f"  Stop with: iflycode-proxy stop-service")
         run_supervisor(_run_server, host=host, port=port, verbose=ctx.obj.get("verbose"))
         return
@@ -293,22 +293,22 @@ def service_status_cmd():
     pid = get_service_status()
     if pid:
         click.echo(f"Daemon running (PID {pid})")
-        click.echo(f"  Log: ~/.iflycode-proxy/daemon.log")
+        click.echo(f"  Log: ~/.iflycode-2api/daemon.log")
     else:
         click.echo("Daemon not running")
 ```
 
 - [ ] **Step 2: 验证 CLI 子命令注册**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m iflycode_proxy.cli --help`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m iflycode_proxy.cli --help`
 Expected:
   - Exit code: 0
   - Output contains: "serve" and "stop-service" and "service-status"
 
 - [ ] **Step 3: 验证 serve --help 显示 --service 选项**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m iflycode_proxy.cli serve --help`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m iflycode_proxy.cli serve --help`
 Expected:
   - Exit code: 0
   - Output contains: "--service"
 
 - [ ] **Step 4: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add iflycode_proxy/cli.py && git commit -m "feat(cli): add --service daemon mode with stop-service and service-status commands"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add iflycode_proxy/cli.py && git commit -m "feat(cli): add --service daemon mode with stop-service and service-status commands"`

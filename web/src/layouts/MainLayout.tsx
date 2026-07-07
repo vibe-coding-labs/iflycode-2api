@@ -43,13 +43,13 @@ const MainLayout: React.FC = () => {
       </Sider>
       <Layout>
         <Header style={{ background: '#fff', padding: '0 24px', fontSize: 16, fontWeight: 500 }}>
-          iFlyCode OpenAI Proxy
+          iFlyCode 2API
         </Header>
         <Content style={{ margin: 24 }}>
           <Outlet />
         </Content>
         <Footer style={{ textAlign: 'center', padding: '12px 24px', color: '#999', fontSize: 12 }}>
-          iFlyCode Proxy {version && `v${version}`} — port 40419
+          iFlyCode 2API {version && `v${version}`} — port 40419
         </Footer>
       </Layout>
     </Layout>

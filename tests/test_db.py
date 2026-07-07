@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from iflycode_proxy.db import Database, _generate_account_id, _generate_api_key
+from iflycode_2api.db import Database, _generate_account_id, _generate_api_key
 
 
 # ---------------------------------------------------------------------------
@@ -504,14 +504,14 @@ class TestStats:
 
 class TestCredentialRouterIntegration:
     def test_get_credential_router(self, db_with_two_accounts):
-        with patch("iflycode_proxy.credential_router.CredentialRouter") as MockRouter:
+        with patch("iflycode_2api.credential_router.CredentialRouter") as MockRouter:
             mock_router = MagicMock()
             MockRouter.return_value = mock_router
             router = db_with_two_accounts.get_credential_router()
             assert mock_router.add_account.call_count == 2
 
     def test_get_credential_router_empty_db(self, db):
-        with patch("iflycode_proxy.credential_router.CredentialRouter") as MockRouter:
+        with patch("iflycode_2api.credential_router.CredentialRouter") as MockRouter:
             mock_router = MagicMock()
             MockRouter.return_value = mock_router
             router = db.get_credential_router()
@@ -529,7 +529,7 @@ class TestAccountModels:
             {"modelCode": "4.0Ultra", "modelName": "Ultra", "modelId": "1", "checked": True},
             {"modelCode": "3.5", "modelName": "Standard", "modelId": "2"},
         ]
-        with patch("iflycode_proxy.client.Client") as MockClient:
+        with patch("iflycode_2api.client.Client") as MockClient:
             mock_instance = MagicMock()
             mock_instance.list_models.return_value = fake_models
             MockClient.return_value = mock_instance
@@ -543,7 +543,7 @@ class TestAccountModels:
         assert db.get_account_models("acc-nope") == []
 
     def test_get_account_models_client_exception(self, db_with_account):
-        with patch("iflycode_proxy.client.Client") as MockClient:
+        with patch("iflycode_2api.client.Client") as MockClient:
             MockClient.return_value.list_models.side_effect = Exception("network error")
             assert db_with_account.get_account_models("acc-test01") == []
 
@@ -555,21 +555,21 @@ class TestAccountModels:
 
 class TestValidateAccount:
     def test_validate_account_success(self, db_with_account):
-        with patch("iflycode_proxy.client.Client") as MockClient:
+        with patch("iflycode_2api.client.Client") as MockClient:
             mock_instance = MagicMock()
             mock_instance.validate.return_value = True
             MockClient.return_value = mock_instance
             assert db_with_account.validate_account("acc-test01") is True
 
     def test_validate_account_invalid(self, db_with_account):
-        with patch("iflycode_proxy.client.Client") as MockClient:
+        with patch("iflycode_2api.client.Client") as MockClient:
             mock_instance = MagicMock()
             mock_instance.validate.return_value = False
             MockClient.return_value = mock_instance
             assert db_with_account.validate_account("acc-test01") is False
 
     def test_validate_account_exception(self, db_with_account):
-        with patch("iflycode_proxy.client.Client") as MockClient:
+        with patch("iflycode_2api.client.Client") as MockClient:
             mock_instance = MagicMock()
             mock_instance.validate.side_effect = Exception("boom")
             MockClient.return_value = mock_instance
@@ -609,7 +609,7 @@ class TestMigration:
         conn.close()
 
         # Open with Database — triggers migration
-        with patch("iflycode_proxy.crypto.encrypt", side_effect=lambda x: f"enc:{x}"):
+        with patch("iflycode_2api.crypto.encrypt", side_effect=lambda x: f"enc:{x}"):
             db = Database(db_path=tmp_db_path)
             accounts = db.list_accounts()
             db.close()

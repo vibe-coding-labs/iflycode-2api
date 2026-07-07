@@ -5,7 +5,7 @@ import logging
 import os
 from typing import Optional
 
-log = logging.getLogger("iflycode-proxy.janitor")
+log = logging.getLogger("iflycode-2api.janitor")
 
 _DEFAULT_RETENTION_DAYS = 30
 _DEFAULT_MAX_MB = 1024

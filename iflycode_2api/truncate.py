@@ -10,7 +10,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-log = logging.getLogger("iflycode-proxy.truncate")
+log = logging.getLogger("iflycode-2api.truncate")
 
 # Upstream model context window size estimate
 CONTEXT_WINDOW_SIZE = 196608

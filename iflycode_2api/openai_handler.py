@@ -18,11 +18,11 @@ from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from openai.types.completion_usage import CompletionUsage
 from openai.types.model import Model
 
-from iflycode_proxy.credential_router import CredentialRouter
-from iflycode_proxy.proxy_logger import log_request, log_response, log_error
-from iflycode_proxy.sessions import record_session
+from iflycode_2api.credential_router import CredentialRouter
+from iflycode_2api.proxy_logger import log_request, log_response, log_error
+from iflycode_2api.sessions import record_session
 
-log = logging.getLogger("iflycode-proxy.openai")
+log = logging.getLogger("iflycode-2api.openai")
 
 # Static model metadata — mirrors web/src/data/sparkModels.ts
 SPARK_MODEL_META = {
@@ -266,7 +266,7 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
 
         # ── Quota check ──
         try:
-            from iflycode_proxy.quota import check_daily_quota
+            from iflycode_2api.quota import check_daily_quota
             db = getattr(request.app.state, "db", None)
             if db and api_key:
                 acc_id = cred_router.get_account_id(api_key or None) or api_key

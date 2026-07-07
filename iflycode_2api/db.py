@@ -7,9 +7,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-log = logging.getLogger("iflycode-proxy.db")
+log = logging.getLogger("iflycode-2api.db")
 
-DATA_DIR = Path.home() / ".iflycode-proxy"
+DATA_DIR = Path.home() / ".iflycode-2api"
 DB_PATH = DATA_DIR / "proxy.db"
 
 SCHEMA = """
@@ -126,7 +126,7 @@ class Database:
         conn.execute("DROP TABLE IF EXISTS accounts")
         conn.executescript(SCHEMA)
 
-        from iflycode_proxy.crypto import encrypt
+        from iflycode_2api.crypto import encrypt
         for r in rows:
             old_api_key = r["api_key"]
             token = r["token"]
@@ -156,7 +156,7 @@ class Database:
     def add_account(self, account_id: str, api_key: str, spark_token: str, user_id: str,
                     is_default: bool = False, default_model: str = "", remark: str = "",
                     display_order: int = 0, daily_limit: int = 0, monthly_limit: int = 0):
-        from iflycode_proxy.crypto import encrypt
+        from iflycode_2api.crypto import encrypt
         conn = self._get_conn()
         if is_default:
             conn.execute("UPDATE accounts SET is_default = 0")
@@ -229,7 +229,7 @@ class Database:
         ]
 
     def get_account(self, account_id: str) -> Optional[Dict[str, Any]]:
-        from iflycode_proxy.crypto import decrypt, is_encrypted
+        from iflycode_2api.crypto import decrypt, is_encrypted
         conn = self._get_conn()
         row = conn.execute(
             "SELECT account_id, api_key, spark_token, user_id, is_default, default_model, daily_limit, monthly_limit FROM accounts WHERE account_id = ?",
@@ -312,7 +312,7 @@ class Database:
     # -- Account lookup --
 
     def get_account_by_api_key(self, api_key: str) -> Optional[Dict[str, Any]]:
-        from iflycode_proxy.crypto import decrypt, is_encrypted
+        from iflycode_2api.crypto import decrypt, is_encrypted
         conn = self._get_conn()
         row = conn.execute(
             "SELECT account_id, api_key, spark_token, user_id, is_default, default_model, remark, daily_limit, monthly_limit FROM accounts WHERE api_key = ?",
@@ -336,7 +336,7 @@ class Database:
         }
 
     def get_default_account(self) -> Optional[Dict[str, Any]]:
-        from iflycode_proxy.crypto import decrypt, is_encrypted
+        from iflycode_2api.crypto import decrypt, is_encrypted
         conn = self._get_conn()
         row = conn.execute(
             "SELECT account_id, api_key, spark_token, user_id FROM accounts WHERE is_default = 1"
@@ -371,7 +371,7 @@ class Database:
         acc = self.get_account(account_id)
         if not acc:
             return False
-        from iflycode_proxy.client import Client
+        from iflycode_2api.client import Client
         try:
             client = Client(acc["spark_token"], acc.get("user_id", ""))
             valid = client.validate()
@@ -624,7 +624,7 @@ class Database:
         acc = self.get_account(account_id)
         if not acc:
             return []
-        from iflycode_proxy.client import Client
+        from iflycode_2api.client import Client
         try:
             client = Client(acc["spark_token"], acc.get("user_id", ""))
             models_data = client.list_models()
@@ -648,7 +648,7 @@ class Database:
             return []
 
     def get_credential_router(self):
-        from iflycode_proxy.credential_router import CredentialRouter
+        from iflycode_2api.credential_router import CredentialRouter
         router = CredentialRouter()
         for acc in self.list_accounts():
             full = self.get_account(acc["account_id"])

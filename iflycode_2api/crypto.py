@@ -3,7 +3,7 @@
 Uses AES-256-GCM directly. Storage format:  aes:<hex(nonce + ciphertext + tag)>
 
 Legacy Fernet-encrypted values (enc: prefix) are still supported for decryption.
-The key file (~/.iflycode-proxy/.enc_key) stores raw 32-byte key as hex.
+The key file (~/.iflycode-2api/.enc_key) stores raw 32-byte key as hex.
 """
 
 import base64
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-_DATA_DIR = Path.home() / ".iflycode-proxy"
+_DATA_DIR = Path.home() / ".iflycode-2api"
 _KEY_FILE = _DATA_DIR / ".enc_key"
 _LEGACY_KEY_FILE = _DATA_DIR / ".enc_key.legacy"
 

@@ -9,7 +9,7 @@ from typing import Optional
 
 import httpx
 
-log = logging.getLogger("iflycode-proxy.auth")
+log = logging.getLogger("iflycode-2api.auth")
 
 BASE_URL = "https://iflycode-xfsaas.xfyun.cn"
 FALLBACK_LOGIN_URL = "https://iflycode.xfyun.cn/chooseIdentity"

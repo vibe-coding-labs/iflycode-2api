@@ -36,7 +36,7 @@
 Because the file contains XML-like tags that conflict with editing tools, all changes must be applied via a single Python script that handles the 7 fixes atomically.
 
 ```bash
-cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy
+cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api
 python3 apply_protocol_fixes.py
 ```
 
@@ -60,7 +60,7 @@ The script performs these changes:
 - [ ] **Step 2: Verify Python syntax**
 
 ```bash
-cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy
+cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api
 python3 -m py_compile iflycode_proxy/anthropic_handler.py && echo "SYNTAX OK" || echo "SYNTAX ERROR"
 ```
 
@@ -71,7 +71,7 @@ Expected:
 - [ ] **Step 3: Verify all fixes were applied correctly**
 
 ```bash
-cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy
+cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api
 python3 -c "
 with open('iflycode_proxy/anthropic_handler.py', 'r') as f:
     content = f.read()
@@ -104,7 +104,7 @@ Expected:
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy
+cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api
 git add iflycode_proxy/anthropic_handler.py apply_protocol_fixes.py && git commit -m "fix(anthropic): fix tool_use protocol - new tag format, known_tools passthrough, nested JSON parsing, backward compat"
 ```
 
@@ -145,7 +145,7 @@ Add at the end of each model object (after `tierLabel`):
 - [ ] **Step 3: Verify TypeScript compilation**
 
 ```bash
-cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web
+cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web
 npx tsc --noEmit --pretty 2>&1 | head -30
 ```
 
@@ -156,7 +156,7 @@ Expected:
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy
+cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api
 git add web/src/data/sparkModels.ts && git commit -m "feat(models): add supportsToolUse and supportsCoding fields to spark model data"
 ```
 
@@ -192,7 +192,7 @@ Replace the "capabilities" column render function with one that shows `编码` (
 - [ ] **Step 2: Verify TypeScript compilation**
 
 ```bash
-cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web
+cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web
 npx tsc --noEmit --pretty 2>&1 | head -20
 ```
 
@@ -202,7 +202,7 @@ Expected:
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy
+cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api
 git add web/src/pages/AccountDetail.tsx && git commit -m "feat(ui): show tool_use and coding capability badges in account detail model table"
 ```
 
@@ -247,7 +247,7 @@ File: `web/src/pages/Chat.tsx` — add inside the `<Space wrap>` block, after th
 - [ ] **Step 3: Verify TypeScript compilation**
 
 ```bash
-cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web
+cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web
 npx tsc --noEmit --pretty 2>&1 | head -20
 ```
 
@@ -257,6 +257,6 @@ Expected:
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy
+cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api
 git add web/src/pages/Chat.tsx && git commit -m "feat(ui): add model capability hints in chat page - show chat-only label and tool_use warning"
 ```

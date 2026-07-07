@@ -11,15 +11,15 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 
-from iflycode_proxy.credential_router import CredentialRouter
-from iflycode_proxy.openai_handler import create_openai_router
-from iflycode_proxy.anthropic_handler import create_anthropic_router
-from iflycode_proxy.sessions import session_stats
+from iflycode_2api.credential_router import CredentialRouter
+from iflycode_2api.openai_handler import create_openai_router
+from iflycode_2api.anthropic_handler import create_anthropic_router
+from iflycode_2api.sessions import session_stats
 
 # Will be imported conditionally to avoid circular dependency
 _auth_middleware_added = False
 
-log = logging.getLogger("iflycode-proxy")
+log = logging.getLogger("iflycode-2api")
 
 _janitor_task: Optional[object] = None
 _START_TIME = time.time()
@@ -30,7 +30,7 @@ _VERSION = "1.0.0"
 async def lifespan(app: FastAPI):
     db = app.state.db
     if db:
-        from iflycode_proxy.janitor import start_janitor
+        from iflycode_2api.janitor import start_janitor
         global _janitor_task
         _janitor_task = start_janitor(
             db_path=str(db.db_path),
@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
             cleanup_fn=db.cleanup_logs,
         )
         # Start keepalive service
-        from iflycode_proxy.keepalive import KeepaliveService
+        from iflycode_2api.keepalive import KeepaliveService
         keeper = KeepaliveService(
             get_stale_fn=lambda ttl, bmult: db.get_stale_accounts(normal_ttl_hours=ttl // 3600, backoff_multiplier=bmult),
             set_status_fn=db.set_credential_status,
@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app(router: CredentialRouter, db=None):
-    app = FastAPI(title="iFlyCode Proxy", version=_VERSION, lifespan=lifespan)
+    app = FastAPI(title="iFlyCode 2API", version=_VERSION, lifespan=lifespan)
     app.state.db = db
 
     app.add_middleware(
@@ -70,7 +70,7 @@ def create_app(router: CredentialRouter, db=None):
 
     if db:
         # Add auth middleware to protect /api/* endpoints
-        from iflycode_proxy.auth_middleware import AuthMiddleware
+        from iflycode_2api.auth_middleware import AuthMiddleware
         app.add_middleware(AuthMiddleware, db=db)
 
         @app.middleware("http")
@@ -102,7 +102,7 @@ def create_app(router: CredentialRouter, db=None):
                 )
             return response
 
-        from iflycode_proxy.web_api import create_web_api_router
+        from iflycode_2api.web_api import create_web_api_router
         app.include_router(create_web_api_router(db, cred_router=router))
 
     app.include_router(create_openai_router(router))
@@ -129,7 +129,7 @@ def create_app(router: CredentialRouter, db=None):
         s = session_stats()
         return {
             "status": "ok",
-            "service": "iflycode-proxy",
+            "service": "iflycode-2api",
             "version": _VERSION,
             "uptime_seconds": uptime,
             "accounts": acc_count,

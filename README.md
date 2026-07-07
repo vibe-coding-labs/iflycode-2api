@@ -1,4 +1,4 @@
-# iFlyCode Proxy
+# iFlyCode 2API
 
 把讯飞星火飞码变成 OpenAI API，这样 Claude Code、Codex 这些工具就能直接用了。
 
@@ -67,7 +67,7 @@
 
 ```bash
 pip install -e .
-iflycode-proxy serve
+iflycode-2api serve
 ```
 
 打开 http://localhost:40419 添加你的讯飞 SSO 账号，搞定。
@@ -132,9 +132,9 @@ print(client.chat.completions.create(
 ## CLI
 
 ```bash
-iflycode-proxy serve [-p 端口] [--service]   # 启动，--service 跑后台
-iflycode-proxy stop-service                   # 停后台
-iflycode-proxy service-status                 # 看状态
+iflycode-2api serve [-p 端口] [--service]   # 启动，--service 跑后台
+iflycode-2api stop-service                   # 停后台
+iflycode-2api service-status                 # 看状态
 ```
 
 ## 技术栈

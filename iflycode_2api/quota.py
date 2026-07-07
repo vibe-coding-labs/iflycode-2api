@@ -4,7 +4,7 @@ Checks daily request counts and monthly token consumption against
 configurable limits stored in the account record.
 
 Usage:
-    from iflycode_proxy.quota import check_daily_quota
+    from iflycode_2api.quota import check_daily_quota
     allowed, reason = check_daily_quota(db, account_id, api_key)
     if not allowed:
         return HTTPException(429, reason)
@@ -15,9 +15,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from iflycode_proxy.db import Database
+from iflycode_2api.db import Database
 
-log = logging.getLogger("iflycode-proxy.quota")
+log = logging.getLogger("iflycode-2api.quota")
 
 
 def get_quota_limits(db: Database, account_id: str) -> tuple[Optional[int], Optional[int]]:

@@ -3,9 +3,9 @@
 import logging
 from typing import Dict, List, Optional
 
-from iflycode_proxy.client import Client
+from iflycode_2api.client import Client
 
-log = logging.getLogger("iflycode-proxy.router")
+log = logging.getLogger("iflycode-2api.router")
 
 
 class CredentialRouter:

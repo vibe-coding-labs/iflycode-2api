@@ -39,7 +39,7 @@ dependencies = [
 ]
 ```
 
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && source .venv/bin/activate && pip install "openai>=1.0" 2>&1 | tail -5`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && source .venv/bin/activate && pip install "openai>=1.0" 2>&1 | tail -5`
 Expected:
   - Exit code: 0
   - Output contains: "Successfully installed"
@@ -264,14 +264,14 @@ def create_openai_router(cred_router: CredentialRouter) -> APIRouter:
 ```
 
 - [ ] **Step 3: 验证后端启动和 API 响应格式**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && lsof -ti:40419 2>/dev/null | xargs kill -9 2>/dev/null; source .venv/bin/activate && python -m iflycode_proxy.cli serve &>/tmp/iflycode-proxy.log & sleep 2 && curl -s http://localhost:40419/v1/models | python3 -m json.tool`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && lsof -ti:40419 2>/dev/null | xargs kill -9 2>/dev/null; source .venv/bin/activate && python -m iflycode_proxy.cli serve &>/tmp/iflycode-proxy.log & sleep 2 && curl -s http://localhost:40419/v1/models | python3 -m json.tool`
 Expected:
   - Exit code: 0
   - Output contains: "iflycode-default" and "owned_by"
   - Server log contains no traceback
 
 - [ ] **Step 4: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add pyproject.toml iflycode_proxy/openai_handler.py && git commit -m "refactor(proxy): use openai SDK types for protocol format conversion"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add pyproject.toml iflycode_proxy/openai_handler.py && git commit -m "refactor(proxy): use openai SDK types for protocol format conversion"`
 
 ---
 
@@ -462,12 +462,12 @@ export default AccountDetail;
 ```
 
 - [ ] **Step 2: 验证 TypeScript 编译**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web && npx tsc --noEmit 2>&1 | head -20`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web && npx tsc --noEmit 2>&1 | head -20`
 Expected:
   - Exit code: 0 or errors only about missing api methods (fixed in Task 5)
 
 - [ ] **Step 3: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add web/src/pages/AccountDetail.tsx && git commit -m "feat(web): add AccountDetail page with stats and model config"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add web/src/pages/AccountDetail.tsx && git commit -m "feat(web): add AccountDetail page with stats and model config"`
 
 ---
 
@@ -618,7 +618,7 @@ export default Settings;
 ```
 
 - [ ] **Step 2: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add web/src/pages/Settings.tsx && git commit -m "feat(web): add Settings page for proxy configuration"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add web/src/pages/Settings.tsx && git commit -m "feat(web): add Settings page for proxy configuration"`
 
 ---
 
@@ -748,7 +748,7 @@ export default Logs;
 ```
 
 - [ ] **Step 2: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add web/src/pages/Logs.tsx && git commit -m "feat(web): add Request Logs page with pagination"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add web/src/pages/Logs.tsx && git commit -m "feat(web): add Request Logs page with pagination"`
 
 ---
 
@@ -968,7 +968,7 @@ render: (text: string) => (
 ```
 
 - [ ] **Step 5: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add web/src/api.ts web/src/App.tsx web/src/layouts/MainLayout.tsx web/src/pages/Accounts.tsx && git commit -m "feat(web): update routing, navigation, and API client for new pages"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add web/src/api.ts web/src/App.tsx web/src/layouts/MainLayout.tsx web/src/pages/Accounts.tsx && git commit -m "feat(web): update routing, navigation, and API client for new pages"`
 
 ---
 
@@ -1015,7 +1015,7 @@ Expected:
   - Output: `{"models": []}`
 
 - [ ] **Step 4: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add iflycode_proxy/web_api.py iflycode_proxy/db.py && git commit -m "feat(api): add per-account model list endpoint"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add iflycode_proxy/web_api.py iflycode_proxy/db.py && git commit -m "feat(api): add per-account model list endpoint"`
 
 ---
 
@@ -1026,13 +1026,13 @@ Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add ifl
 - Rebuild: `iflycode_proxy/static/`（构建产物）
 
 - [ ] **Step 1: 构建前端**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web && npm run build 2>&1`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web && npm run build 2>&1`
 Expected:
   - Exit code: 0
   - Output contains: "built in"
 
 - [ ] **Step 2: 重启后端并验证所有页面可访问**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && lsof -ti:40419 2>/dev/null | xargs kill -9 2>/dev/null; source .venv/bin/activate && python -m iflycode_proxy.cli serve &>/tmp/iflycode-proxy.log & sleep 2 && curl -s http://localhost:40419/ | head -5 && echo "---" && curl -s http://localhost:40419/api/health | python3 -m json.tool && echo "---" && curl -s http://localhost:40419/api/stats/logs | python3 -m json.tool && echo "---" && curl -s http://localhost:40419/api/settings | python3 -m json.tool`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && lsof -ti:40419 2>/dev/null | xargs kill -9 2>/dev/null; source .venv/bin/activate && python -m iflycode_proxy.cli serve &>/tmp/iflycode-proxy.log & sleep 2 && curl -s http://localhost:40419/ | head -5 && echo "---" && curl -s http://localhost:40419/api/health | python3 -m json.tool && echo "---" && curl -s http://localhost:40419/api/stats/logs | python3 -m json.tool && echo "---" && curl -s http://localhost:40419/api/settings | python3 -m json.tool`
 Expected:
   - Frontend HTML loads
   - health returns `{"status": "ok", ...}`
@@ -1040,7 +1040,7 @@ Expected:
   - settings returns `{"settings": {...}}`
 
 - [ ] **Step 3: 推送所有更改**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git push origin main 2>&1`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git push origin main 2>&1`
 Expected:
   - Exit code: 0
   - Output contains: "main -> main"

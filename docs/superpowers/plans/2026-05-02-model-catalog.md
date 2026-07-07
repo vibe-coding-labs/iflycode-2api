@@ -303,15 +303,15 @@ import type { SparkModelInfo } from '../data/sparkModels';
 ```
 
 - [ ] **Step 6: 验证前端构建**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web && npm run build`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web && npm run build`
 Expected:
   - Exit code: 0
   - Output contains: "built in"
 
 - [ ] **Step 7: 验证后端启动**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && lsof -ti:40419 2>/dev/null | xargs kill 2>/dev/null; sleep 1; .venv/bin/python -m iflycode_proxy.cli serve &>/tmp/iflycode-proxy.log & sleep 2 && curl -s http://localhost:40419/api/health`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && lsof -ti:40419 2>/dev/null | xargs kill 2>/dev/null; sleep 1; .venv/bin/python -m iflycode_proxy.cli serve &>/tmp/iflycode-proxy.log & sleep 2 && curl -s http://localhost:40419/api/health`
 Expected:
   - Output contains: `"status": "ok"`
 
 - [ ] **Step 8: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add iflycode_proxy/client.py iflycode_proxy/db.py web/src/data/sparkModels.ts web/src/api.ts web/src/pages/AccountDetail.tsx && git commit -m "feat(ui): add SparkDesk model catalog with metadata in account detail page"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add iflycode_proxy/client.py iflycode_proxy/db.py web/src/data/sparkModels.ts web/src/api.ts web/src/pages/AccountDetail.tsx && git commit -m "feat(ui): add SparkDesk model catalog with metadata in account detail page"`

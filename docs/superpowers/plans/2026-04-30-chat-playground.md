@@ -450,12 +450,12 @@ Run: `git add web/src/App.tsx web/src/layouts/MainLayout.tsx && git commit -m "f
 - None (验证 only)
 
 - [ ] **Step 1: 重启后端服务并验证聊天端点可达**
-Run: `kill $(lsof -ti :40419) 2>/dev/null; sleep 1; cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m iflycode_proxy.cli serve --port 40419 & sleep 3 && curl -s http://localhost:40419/api/health | python3 -m json.tool`
+Run: `kill $(lsof -ti :40419) 2>/dev/null; sleep 1; cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m iflycode_proxy.cli serve --port 40419 & sleep 3 && curl -s http://localhost:40419/api/health | python3 -m json.tool`
 Expected:
   - Output contains: "status": "ok"
 
 - [ ] **Step 2: 验证前端静态资源包含 Chat 组件**
-Run: `ls /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/iflycode_proxy/static/assets/ | grep -i chat`
+Run: `ls /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/iflycode_proxy/static/assets/ | grep -i chat`
 Expected:
   - Exit code: 0
   - Output contains a filename with "Chat"

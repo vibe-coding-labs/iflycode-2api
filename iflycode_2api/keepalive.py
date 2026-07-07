@@ -14,7 +14,7 @@ import threading
 import time
 from typing import Callable, Optional
 
-log = logging.getLogger("iflycode-proxy.keepalive")
+log = logging.getLogger("iflycode-2api.keepalive")
 
 # Default schedule
 _DEFAULT_CHECK_INTERVAL = 600  # 10 minutes between rounds

@@ -5,14 +5,14 @@ import sys
 
 import click
 
-log = logging.getLogger("iflycode-proxy")
+log = logging.getLogger("iflycode-2api")
 
 AGENT_VERSION = "3.4.2"
 
 
 def _get_db_and_router():
     """Load the default database and credential router."""
-    from iflycode_proxy.db import Database
+    from iflycode_2api.db import Database
     db = Database()
     router = db.get_credential_router()
     return db, router
@@ -38,8 +38,8 @@ def cli(ctx, verbose: bool):
 @click.pass_context
 def serve(ctx, host: str, port: int, service: bool, tls: bool, tls_cert: str, tls_key: str):
     import uvicorn
-    from iflycode_proxy.db import Database
-    from iflycode_proxy.server import create_app
+    from iflycode_2api.db import Database
+    from iflycode_2api.server import create_app
 
     ssl_certfile = None
     ssl_keyfile = None
@@ -52,7 +52,7 @@ def serve(ctx, host: str, port: int, service: bool, tls: bool, tls_cert: str, tl
             ssl_certfile, ssl_keyfile = _ensure_tls()
 
     if service:
-        from iflycode_proxy.daemon import run_supervisor
+        from iflycode_2api.daemon import run_supervisor
 
         def _run_server(**kwargs):
             db = Database()
@@ -61,9 +61,9 @@ def serve(ctx, host: str, port: int, service: bool, tls: bool, tls_cert: str, tl
             uvicorn.run(app, host=kwargs["host"], port=kwargs["port"],
                         log_level="debug" if kwargs.get("verbose") else "info")
 
-        click.echo(f"Starting iFlyCode Proxy as daemon on http://{host}:{port}")
-        click.echo(f"  Log file: ~/.iflycode-proxy/daemon.log")
-        click.echo(f"  Stop with: iflycode-proxy stop-service")
+        click.echo(f"Starting iFlyCode 2API as daemon on http://{host}:{port}")
+        click.echo(f"  Log file: ~/.iflycode-2api/daemon.log")
+        click.echo(f"  Stop with: iflycode-2api stop-service")
         run_supervisor(_run_server, host=host, port=port, verbose=ctx.obj.get("verbose"))
         return
 
@@ -71,7 +71,7 @@ def serve(ctx, host: str, port: int, service: bool, tls: bool, tls_cert: str, tl
     router = db.get_credential_router()
     app = create_app(router, db=db)
 
-    click.echo(f"\niFlyCode Proxy v1.0.0 — http://{host}:{port}")
+    click.echo(f"\niFlyCode 2API v1.0.0 — http://{host}:{port}")
     click.echo(f"  Agent fingerprint: iFlyCode 3.4.2")
     click.echo(f"  Endpoints:")
     click.echo(f"    POST /v1/chat/completions  — OpenAI compatible chat")
@@ -87,25 +87,25 @@ def serve(ctx, host: str, port: int, service: bool, tls: bool, tls_cert: str, tl
 @cli.command("stop-service")
 def stop_service_cmd():
     """Stop the running daemon service."""
-    from iflycode_proxy.daemon import stop_service
+    from iflycode_2api.daemon import stop_service
     stop_service()
 
 
 @cli.command("service-status")
 def service_status_cmd():
     """Check daemon service status."""
-    from iflycode_proxy.daemon import get_service_status
+    from iflycode_2api.daemon import get_service_status
     pid = get_service_status()
     if pid:
         click.echo(f"Daemon running (PID {pid})")
-        click.echo(f"  Log: ~/.iflycode-proxy/daemon.log")
+        click.echo(f"  Log: ~/.iflycode-2api/daemon.log")
     else:
         click.echo("Daemon not running")
 
 
 @cli.command()
 def version():
-    click.echo("iFlyCode Proxy v1.0.0")
+    click.echo("iFlyCode 2API v1.0.0")
     click.echo(f"  Agent fingerprint: iFlyCode {AGENT_VERSION}")
     click.echo(f"  Default port: 40419")
 
@@ -127,7 +127,7 @@ def _ensure_tls():
     from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
     import datetime
 
-    data_dir = Path.home() / ".iflycode-proxy"
+    data_dir = Path.home() / ".iflycode-2api"
     data_dir.mkdir(parents=True, exist_ok=True)
     cert_file = data_dir / "cert.pem"
     key_file = data_dir / "key.pem"
@@ -138,8 +138,8 @@ def _ensure_tls():
     # Generate self-signed cert
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, "iFlyCode Proxy"),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "iFlyCode Proxy"),
+        x509.NameAttribute(NameOID.COMMON_NAME, "iFlyCode 2API"),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "iFlyCode 2API"),
     ])
     cert = (
         x509.CertificateBuilder()
@@ -172,8 +172,8 @@ def _ensure_tls():
 def chat(message, model, stream, max_tokens):
     """Send a chat message and print the response."""
     import json
-    from iflycode_proxy.db import Database
-    from iflycode_proxy.credential_router import CredentialRouter
+    from iflycode_2api.db import Database
+    from iflycode_2api.credential_router import CredentialRouter
 
     db = Database()
     router = db.get_credential_router()
@@ -275,8 +275,8 @@ def whoami():
 @click.option("-p", "--password", default="", help="New password (omit for interactive prompt)")
 def reset_password(password):
     """Reset the management panel password."""
-    from iflycode_proxy.db import Database
-    from iflycode_proxy.auth_middleware import hash_password, _jwt_secret
+    from iflycode_2api.db import Database
+    from iflycode_2api.auth_middleware import hash_password, _jwt_secret
 
     db = Database()
 

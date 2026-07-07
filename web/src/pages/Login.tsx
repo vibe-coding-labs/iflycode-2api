@@ -40,7 +40,7 @@ const LoginPage: React.FC = () => {
     }}>
       <Tooltip title="去 GitHub Star 支持我们">
         <a
-          href="https://github.com/vibe-coding-labs/iflycode-proxy"
+          href="https://github.com/vibe-coding-labs/iflycode-2api"
           target="_blank"
           rel="noopener noreferrer"
           style={{

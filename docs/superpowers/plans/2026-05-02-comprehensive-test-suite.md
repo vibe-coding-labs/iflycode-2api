@@ -27,7 +27,7 @@
 
 - [ ] **Step 1: 安装 respx 依赖 — mock httpx 请求用于测试**
 
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && pip install respx pytest-asyncio --upgrade`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && pip install respx pytest-asyncio --upgrade`
 Expected:
   - Exit code: 0
   - `python3 -c "import respx; print(respx.__version__)"` 输出非空
@@ -146,13 +146,13 @@ def app_client_no_db(cred_router):
 ```
 
 - [ ] **Step 4: 验证测试基础设施**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m pytest tests/ --co -q 2>&1 | head -20`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m pytest tests/ --co -q 2>&1 | head -20`
 Expected:
   - Exit code: 0 (no collection errors)
   - Output shows "conftest.py" loaded
 
 - [ ] **Step 5: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add tests/__init__.py tests/conftest.py pyproject.toml && git commit -m "feat(test): add test infrastructure with shared fixtures"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add tests/__init__.py tests/conftest.py pyproject.toml && git commit -m "feat(test): add test infrastructure with shared fixtures"`
 
 ---
 
@@ -229,13 +229,13 @@ class TestIsEncrypted:
 ```
 
 - [ ] **Step 2: 验证 crypto 测试**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m pytest tests/test_crypto.py -v`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m pytest tests/test_crypto.py -v`
 Expected:
   - Exit code: 0
   - Output contains "10 passed"
 
 - [ ] **Step 3: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add tests/test_crypto.py && git commit -m "test(crypto): add encryption/decryption unit tests (10 cases)"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add tests/test_crypto.py && git commit -m "test(crypto): add encryption/decryption unit tests (10 cases)"`
 
 ---
 
@@ -479,13 +479,13 @@ class TestStats:
 ```
 
 - [ ] **Step 2: 验证 DB 测试**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m pytest tests/test_db.py -v`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m pytest tests/test_db.py -v`
 Expected:
   - Exit code: 0
   - Output contains "30 passed"
 
 - [ ] **Step 3: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add tests/test_db.py && git commit -m "test(db): add database layer unit tests (30 cases)"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add tests/test_db.py && git commit -m "test(db): add database layer unit tests (30 cases)"`
 
 ---
 
@@ -645,13 +645,13 @@ class TestGetAccountId:
 ```
 
 - [ ] **Step 2: 验证 CredentialRouter 测试**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m pytest tests/test_credential_router.py -v`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m pytest tests/test_credential_router.py -v`
 Expected:
   - Exit code: 0
   - Output contains "19 passed"
 
 - [ ] **Step 3: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add tests/test_credential_router.py && git commit -m "test(router): add credential router unit tests (19 cases)"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add tests/test_credential_router.py && git commit -m "test(router): add credential router unit tests (19 cases)"`
 
 ---
 
@@ -795,13 +795,13 @@ class TestValidate:
 ```
 
 - [ ] **Step 2: 验证 Client 测试**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m pytest tests/test_client.py -v`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m pytest tests/test_client.py -v`
 Expected:
   - Exit code: 0
   - Output contains "22 passed"
 
 - [ ] **Step 3: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add tests/test_client.py && git commit -m "test(client): add client module unit tests (22 cases)"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add tests/test_client.py && git commit -m "test(client): add client module unit tests (22 cases)"`
 
 ---
 
@@ -1118,13 +1118,13 @@ class TestSSOEndpoints:
 ```
 
 - [ ] **Step 2: 验证 Web API 测试**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m pytest tests/test_web_api.py -v`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m pytest tests/test_web_api.py -v`
 Expected:
   - Exit code: 0
   - Output contains "30 passed"
 
 - [ ] **Step 3: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add tests/test_web_api.py && git commit -m "test(api): add web API integration tests (30 cases)"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add tests/test_web_api.py && git commit -m "test(api): add web API integration tests (30 cases)"`
 
 ---
 
@@ -1320,13 +1320,13 @@ class TestHealthEndpoint:
 ```
 
 - [ ] **Step 2: 验证 OpenAI Handler 测试**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m pytest tests/test_openai_handler.py -v`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m pytest tests/test_openai_handler.py -v`
 Expected:
   - Exit code: 0
   - Output contains "10 passed"
 
 - [ ] **Step 3: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add tests/test_openai_handler.py && git commit -m "test(openai): add OpenAI handler integration tests (10 cases)"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add tests/test_openai_handler.py && git commit -m "test(openai): add OpenAI handler integration tests (10 cases)"`
 
 ---
 
@@ -1573,13 +1573,13 @@ class TestAnthropicErrorHandling:
 ```
 
 - [ ] **Step 2: 验证 Anthropic Handler 测试**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m pytest tests/test_anthropic_handler.py -v`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m pytest tests/test_anthropic_handler.py -v`
 Expected:
   - Exit code: 0
   - Output contains "12 passed"
 
 - [ ] **Step 3: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add tests/test_anthropic_handler.py && git commit -m "test(anthropic): add Anthropic handler integration tests (12 cases)"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add tests/test_anthropic_handler.py && git commit -m "test(anthropic): add Anthropic handler integration tests (12 cases)"`
 
 ---
 
@@ -1825,16 +1825,16 @@ class TestFullLifecycle:
 ```
 
 - [ ] **Step 3: 验证 Auth 和 E2E 冒烟测试**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m pytest tests/test_auth.py tests/test_e2e_smoke.py -v`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m pytest tests/test_auth.py tests/test_e2e_smoke.py -v`
 Expected:
   - Exit code: 0
   - Output contains "10 passed"
 
 - [ ] **Step 4: 运行完整测试套件**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -m pytest tests/ -v --tb=short 2>&1 | tail -30`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -m pytest tests/ -v --tb=short 2>&1 | tail -30`
 Expected:
   - Exit code: 0
   - Output contains total test count >= 90
 
 - [ ] **Step 5: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add tests/test_auth.py tests/test_e2e_smoke.py && git commit -m "test(auth,e2e): add SSO auth and end-to-end smoke tests (10 cases)"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add tests/test_auth.py tests/test_e2e_smoke.py && git commit -m "test(auth,e2e): add SSO auth and end-to-end smoke tests (10 cases)"`

@@ -136,13 +136,13 @@
 ```
 
 - [ ] **Step 4: 验证 DB 模块导入正常**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -c "from iflycode_proxy.db import Database; db = Database(); print('hourly_stats' in dir(db), 'recent_logs' in dir(db))"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -c "from iflycode_proxy.db import Database; db = Database(); print('hourly_stats' in dir(db), 'recent_logs' in dir(db))"`
 Expected:
   - Exit code: 0
   - Output contains: "True True"
 
 - [ ] **Step 5: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add iflycode_proxy/db.py && git commit -m "feat(db): add hourly stats aggregation and recent logs query for accounts"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add iflycode_proxy/db.py && git commit -m "feat(db): add hourly stats aggregation and recent logs query for accounts"`
 
 ---
 
@@ -175,13 +175,13 @@ Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add ifl
 ```
 
 - [ ] **Step 2: 验证 API endpoint 注册正常**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && python3 -c "from iflycode_proxy.web_api import create_web_api_router; from iflycode_proxy.db import Database; r = create_web_api_router(Database()); routes = [rt.path for rt in r.routes]; print('hourly-stats' in ' '.join(routes), 'recent-logs' in ' '.join(routes))"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && python3 -c "from iflycode_proxy.web_api import create_web_api_router; from iflycode_proxy.db import Database; r = create_web_api_router(Database()); routes = [rt.path for rt in r.routes]; print('hourly-stats' in ' '.join(routes), 'recent-logs' in ' '.join(routes))"`
 Expected:
   - Exit code: 0
   - Output contains: "True True"
 
 - [ ] **Step 3: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add iflycode_proxy/web_api.py && git commit -m "feat(api): add hourly-stats and recent-logs endpoints for account detail page"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add iflycode_proxy/web_api.py && git commit -m "feat(api): add hourly-stats and recent-logs endpoints for account detail page"`
 
 ---
 
@@ -253,13 +253,13 @@ export interface RecentLogEntry {
 ```
 
 - [ ] **Step 3: 验证 TypeScript 编译通过**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web && npx tsc --noEmit 2>&1 | head -20`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web && npx tsc --noEmit 2>&1 | head -20`
 Expected:
   - Exit code: 0
   - Output does NOT contain: "error"
 
 - [ ] **Step 4: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add web/src/api.ts && git commit -m "feat(api-client): add HourlyStats, RecentLogEntry types and API methods"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add web/src/api.ts && git commit -m "feat(api-client): add HourlyStats, RecentLogEntry types and API methods"`
 
 ---
 
@@ -780,16 +780,16 @@ export default AccountDetail;
 ```
 
 - [ ] **Step 2: 验证前端编译通过**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web && npx tsc --noEmit 2>&1 | head -20`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web && npx tsc --noEmit 2>&1 | head -20`
 Expected:
   - Exit code: 0
   - Output does NOT contain: "error"
 
 - [ ] **Step 3: 验证前端构建通过**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy/web && npm run build 2>&1 | tail -5`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api/web && npm run build 2>&1 | tail -5`
 Expected:
   - Exit code: 0
   - Output contains: "built in"
 
 - [ ] **Step 4: 提交**
-Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-proxy && git add web/src/pages/AccountDetail.tsx && git commit -m "feat(ui): enhance account detail page with request stats, token charts, and recent logs"`
+Run: `cd /Users/cc11001100/github/vibe-coding-labs/iflycode-2api && git add web/src/pages/AccountDetail.tsx && git commit -m "feat(ui): enhance account detail page with request stats, token charts, and recent logs"`

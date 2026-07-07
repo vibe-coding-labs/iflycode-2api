@@ -28,9 +28,9 @@ const ForgotPasswordPage: React.FC = () => {
         <Alert type="info" showIcon style={{ marginBottom: 20 }}
                message="在代理服务器终端执行以下命令" />
         <Text strong>交互式重置：</Text>
-        <pre style={codeStyle}>iflycode-proxy reset-password</pre>
+        <pre style={codeStyle}>iflycode-2api reset-password</pre>
         <Text strong>直接指定新密码：</Text>
-        <pre style={codeStyle}>iflycode-proxy reset-password -p 你的新密码</pre>
+        <pre style={codeStyle}>iflycode-2api reset-password -p 你的新密码</pre>
         <Alert type="warning" showIcon style={{ marginBottom: 24 }}
                message={<>密码至少 <Text strong>6 位</Text>，以 bcrypt 哈希加密存储。</>} />
         <Link to="/login">

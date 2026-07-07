@@ -8,12 +8,12 @@ import time
 from pathlib import Path
 from typing import Optional
 
-log = logging.getLogger("iflycode-proxy.daemon")
+log = logging.getLogger("iflycode-2api.daemon")
 
 _MAX_RESTARTS = 10
 _INITIAL_BACKOFF = 1.0
 _MAX_BACKOFF = 30.0
-_PID_DIR = Path.home() / ".iflycode-proxy"
+_PID_DIR = Path.home() / ".iflycode-2api"
 _PID_FILE = _PID_DIR / "daemon.pid"
 _LOG_FILE = _PID_DIR / "daemon.log"
 
@@ -48,8 +48,8 @@ def _setup_logging() -> None:
     _PID_DIR.mkdir(parents=True, exist_ok=True)
     handler = logging.FileHandler(_LOG_FILE)
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
-    logging.getLogger("iflycode-proxy").addHandler(handler)
-    logging.getLogger("iflycode-proxy.daemon").setLevel(logging.DEBUG)
+    logging.getLogger("iflycode-2api").addHandler(handler)
+    logging.getLogger("iflycode-2api.daemon").setLevel(logging.DEBUG)
 
 
 def _daemonize() -> None:
@@ -81,7 +81,7 @@ def run_supervisor(
 
     if _PID_FILE.exists() and not _is_stale_pid():
         print(f"Daemon already running (PID {_PID_FILE.read_text().strip()}). "
-              f"Stop it first: iflycode-proxy stop-service")
+              f"Stop it first: iflycode-2api stop-service")
         sys.exit(1)
 
     _PID_DIR.mkdir(parents=True, exist_ok=True)

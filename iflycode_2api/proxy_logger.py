@@ -10,14 +10,14 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-LOG_DIR = Path.home() / ".iflycode-proxy" / "logs"
+LOG_DIR = Path.home() / ".iflycode-2api" / "logs"
 MAX_BYTES = 50 * 1024 * 1024  # 50 MB per file
 BACKUP_COUNT = 5  # keep 5 rotated files max (250 MB total)
 
 
 def get_proxy_logger() -> logging.Logger:
     """Get or create the proxy request logger with RotatingFileHandler."""
-    logger = logging.getLogger("iflycode-proxy.proxy-log")
+    logger = logging.getLogger("iflycode-2api.proxy-log")
 
     if logger.handlers:
         return logger
