@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     default_model TEXT NOT NULL DEFAULT '',
     remark TEXT NOT NULL DEFAULT '',
     display_order INTEGER NOT NULL DEFAULT 0,
+    daily_limit INTEGER DEFAULT 0,
+    monthly_limit INTEGER DEFAULT 0,
     credential_valid INTEGER DEFAULT -1,
     credential_error TEXT DEFAULT '',
     credential_refreshed_at TEXT DEFAULT '',
@@ -103,6 +105,18 @@ class Database:
                 ALTER TABLE accounts ADD COLUMN display_order INTEGER DEFAULT 0;
             """)
             log.info("Migration: added display_order column to accounts")
+        # Migration: daily_limit, monthly_limit
+        if "daily_limit" not in cols:
+            conn.executescript("""
+                ALTER TABLE accounts ADD COLUMN daily_limit INTEGER DEFAULT 0;
+                ALTER TABLE accounts ADD COLUMN monthly_limit INTEGER DEFAULT 0;
+            """)
+            log.info("Migration: added daily_limit and monthly_limit columns to accounts")
+        elif "monthly_limit" not in cols:
+            conn.executescript("""
+                ALTER TABLE accounts ADD COLUMN monthly_limit INTEGER DEFAULT 0;
+            """)
+            log.info("Migration: added monthly_limit column to accounts")
 
     def _migrate_account_pk(self, conn):
         """Migrate old schema (api_key as PK) to new schema (account_id as PK)."""
@@ -140,16 +154,19 @@ class Database:
     # -- Account CRUD --
 
     def add_account(self, account_id: str, api_key: str, spark_token: str, user_id: str,
-                    is_default: bool = False, default_model: str = "", remark: str = "", display_order: int = 0):
+                    is_default: bool = False, default_model: str = "", remark: str = "",
+                    display_order: int = 0, daily_limit: int = 0, monthly_limit: int = 0):
         from iflycode_proxy.crypto import encrypt
         conn = self._get_conn()
         if is_default:
             conn.execute("UPDATE accounts SET is_default = 0")
         encrypted_token = encrypt(spark_token)
         conn.execute(
-            "INSERT OR REPLACE INTO accounts (account_id, api_key, spark_token, user_id, is_default, default_model, remark, display_order, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-            (account_id, api_key, encrypted_token, user_id, 1 if is_default else 0, default_model, remark, display_order),
+            "INSERT OR REPLACE INTO accounts (account_id, api_key, spark_token, user_id, is_default, "
+            "default_model, remark, display_order, daily_limit, monthly_limit, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+            (account_id, api_key, encrypted_token, user_id, 1 if is_default else 0,
+             default_model, remark, display_order, daily_limit, monthly_limit),
         )
         conn.commit()
         log.info("Account saved: account_id=%s api_key=%s user_id=%s", account_id, api_key[:8] + "...", user_id)
@@ -185,7 +202,8 @@ class Database:
     def list_accounts(self) -> List[Dict[str, Any]]:
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT account_id, api_key, user_id, is_default, default_model, remark, display_order, created_at, "
+            "SELECT account_id, api_key, user_id, is_default, default_model, remark, display_order, "
+            "  daily_limit, monthly_limit, created_at, "
             "  COALESCE(credential_valid, -1) as credential_valid, "
             "  COALESCE(credential_error, '') as credential_error, "
             "  COALESCE(credential_refreshed_at, '') as credential_refreshed_at "
@@ -200,6 +218,8 @@ class Database:
                 "default_model": r["default_model"] or "",
                 "remark": r["remark"] or "",
                 "display_order": r["display_order"] if "display_order" in r.keys() else 0,
+                "daily_limit": r["daily_limit"] if "daily_limit" in r.keys() else 0,
+                "monthly_limit": r["monthly_limit"] if "monthly_limit" in r.keys() else 0,
                 "created_at": r["created_at"],
                 "credential_valid": r["credential_valid"],
                 "credential_error": r["credential_error"],
@@ -212,7 +232,7 @@ class Database:
         from iflycode_proxy.crypto import decrypt, is_encrypted
         conn = self._get_conn()
         row = conn.execute(
-            "SELECT account_id, api_key, spark_token, user_id, is_default, default_model FROM accounts WHERE account_id = ?",
+            "SELECT account_id, api_key, spark_token, user_id, is_default, default_model, daily_limit, monthly_limit FROM accounts WHERE account_id = ?",
             (account_id,),
         ).fetchone()
         if not row:
@@ -227,6 +247,8 @@ class Database:
             "user_id": row["user_id"],
             "is_default": bool(row["is_default"]),
             "default_model": row["default_model"] or "",
+            "daily_limit": row["daily_limit"] if "daily_limit" in row.keys() else 0,
+            "monthly_limit": row["monthly_limit"] if "monthly_limit" in row.keys() else 0,
         }
 
     def update_account_remark(self, account_id: str, remark: str):
@@ -293,7 +315,7 @@ class Database:
         from iflycode_proxy.crypto import decrypt, is_encrypted
         conn = self._get_conn()
         row = conn.execute(
-            "SELECT account_id, api_key, spark_token, user_id, is_default, default_model, remark FROM accounts WHERE api_key = ?",
+            "SELECT account_id, api_key, spark_token, user_id, is_default, default_model, remark, daily_limit, monthly_limit FROM accounts WHERE api_key = ?",
             (api_key,),
         ).fetchone()
         if not row:
@@ -309,6 +331,8 @@ class Database:
             "is_default": bool(row["is_default"]),
             "default_model": row["default_model"] or "",
             "remark": row["remark"] if "remark" in row.keys() else "",
+            "daily_limit": row["daily_limit"] if "daily_limit" in row.keys() else 0,
+            "monthly_limit": row["monthly_limit"] if "monthly_limit" in row.keys() else 0,
         }
 
     def get_default_account(self) -> Optional[Dict[str, Any]]:
